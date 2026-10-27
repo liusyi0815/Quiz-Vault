@@ -7,7 +7,7 @@
 POST {{host}}/auth/login
 Content-Type: application/json
 
-{ "email": "teacher1@example.edu.tw", "password": "changeme" }
+{ "email": "teacher1@example.edu.tw", "password": "Test1234!" }
 
 ###
 @csrf = {{login.response.body.data.csrf_token}}
@@ -44,3 +44,15 @@ X-CSRF-Token: {{csrf}}
 ### 6. 登出
 POST {{host}}/auth/logout
 X-CSRF-Token: {{csrf}}
+
+### 7. 管理員重設密碼（F-22）
+# 先把第 1 步的 email 改成 admin@example.edu.tw 重新登入，csrf 才會是管理員的
+POST {{host}}/admin/users/24/reset-password
+X-CSRF-Token: {{csrf}}
+
+### 8. 使用者修改密碼（以臨時密碼登入後）
+PUT {{host}}/me/password
+Content-Type: application/json
+X-CSRF-Token: {{csrf}}
+
+{ "old_password": "臨時密碼", "new_password": "MyNewPass#2026" }

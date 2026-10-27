@@ -21,7 +21,7 @@
 
 | 操作 | 學生 S | 老師 T | 管理員 A |
 | --- | --- | --- | --- |
-| 註冊 / 登入 / 登出 / 改個人資料 | ✓ | ✓ | ✓ |
+| 註冊 / 登入 / 登出 / 改個人資料與密碼 | ✓ | ✓ | ✓ |
 | 瀏覽課程列表 | ✓ | ✓ | ✓ |
 | 開課 | ✗ | ✓ | ✓ |
 | 修改／刪除課程 | ✗ | ○ | ✓ |
@@ -39,8 +39,9 @@
 | 統計報表 | 僅個人 | ○ | ✓ |
 | 收藏題目／錯題本 | ✓ | ✗ | ✗ |
 | 使用者管理 | ✗ | ✗ | ✓ |
+| 重設他人密碼（F-22） | ✗ | ✗ | ✓ |
 
-**檢查順序**（每個受保護端點）：已登入 → 帳號啟用 → CSRF（寫入請求）→ 角色 → 擁有權／修課關係 → 資源狀態。
+**檢查順序**（每個受保護端點）：已登入 → 帳號啟用 → 是否須先改密碼（旗標為 1 時只放行 `GET /me`、`PUT /me/password`、`POST /auth/logout`）→ CSRF（寫入請求）→ 角色 → 擁有權／修課關係 → 資源狀態。
 
 ## 3. 帳號與登入流程
 
@@ -56,11 +57,66 @@
 1. 以 email 查使用者；不存在也要執行一次假的 `password_verify()`，降低以回應時間判斷帳號是否存在的風險。
 2. 密碼錯誤或帳號不存在 → `INVALID_CREDENTIALS`；`is_active = 0` → `ACCOUNT_DISABLED`。
 3. 成功：`session_regenerate_id(true)`，寫入 `user_id`、`role`，產生 `csrf_token` 存入 session。
-4. 若 `password_needs_rehash()` 為真，順便更新雜湊。
+4. 回應帶 `must_change_password`（來自 `users.must_change_password`），前端據此導向改密碼頁面。
+5. 若 `password_needs_rehash()` 為真，順便更新雜湊。
 
 ### 3.3 登出
 
 銷毀 session 並清除 Cookie。
+
+### 3.4 修改密碼
+
+`PUT /me/password`
+
+1. 驗證輸入：`new_password` 長度 ≥ 8，且**不得與 `old_password` 相同**，否則 `VALIDATION_FAILED`。
+2. 以 `password_verify()` 檢查舊密碼，不符 → `WRONG_PASSWORD`。對「須先改密碼」的帳號，舊密碼就是管理員給的臨時密碼。
+3. 更新：`UPDATE users SET password_hash = ?, must_change_password = 0 WHERE user_id = ?`（目前使用者取自 session）。
+4. `session_regenerate_id(true)`，回傳 `{ must_change_password: false }`。
+
+連續輸入錯誤舊密碼的次數限制屬 P2（與登入防爆破一併處理）。
+
+### 3.5 管理員重設密碼
+
+`POST /admin/users/{user_id}/reset-password`
+
+```
+驗證：目前使用者為 admin（Role middleware）
+→ 目標使用者存在                                         → NOT_FOUND
+→ 目標 ≠ 目前使用者                                      → CANNOT_MODIFY_SELF
+→ 產生臨時密碼：12 碼，字元集排除 0 O 1 l I 等易混淆字元，
+   每個字元用 random_int() 抽取；至少含大寫、小寫與數字各一（不符就重抽）
+→ UPDATE users SET password_hash = <password_hash(臨時密碼)>, must_change_password = 1
+   WHERE user_id = ?
+→ 回傳 temp_password（僅此一次）
+```
+
+- 臨時密碼**不存明文、不寫入 log、不放進 URL**；回應標頭加 `Cache-Control: no-store`。
+- 單一 `UPDATE` 即可，不需額外 transaction。兩位管理員同時重設同一人時，後者覆蓋前者（前一組臨時密碼失效），可接受。
+- 目標已停用（`is_active = 0`）仍可重設，但在重新啟用前依然無法登入。
+- **限制**：目標既有的 session 不會被立即登出，最長在 `SESSION_LIFETIME`（預設 2 小時）閒置後失效；要立即失效需 `password_changed_at`（P2，見 [02 §3.7](02-database.md#37-擴充預留)）。
+- 如何把臨時密碼交給使用者（當面、私訊）不在系統範圍內。
+
+### 3.6 須先改密碼的狀態
+
+```mermaid
+stateDiagram-v2
+  [*] --> normal : 使用者自行註冊（must_change_password = 0）
+  [*] --> must_change : 管理員建立帳號
+  normal --> must_change : 管理員重設密碼
+  must_change --> must_change : 管理員再次重設
+  must_change --> normal : 使用者改密碼成功
+```
+
+`must_change` 狀態下，只放行下列端點，其餘一律回 `403 PASSWORD_CHANGE_REQUIRED`：
+
+| 端點 | 用途 |
+| --- | --- |
+| `GET /me` | 讓前端知道目前狀態 |
+| `PUT /me/password` | 改密碼（唯一能解除此狀態的方式） |
+| `POST /auth/logout` | 允許登出 |
+| `GET /health` | 健康檢查（不需登入） |
+
+實作上是 Auth 之後的一個 Middleware（`MustChangePassword`），檢查 session 載入的使用者旗標。管理員建立帳號（F-17）時同樣設為 `must_change`，使用者首次登入必須改掉初始密碼。
 
 ## 4. 題目規則與出題流程
 
@@ -215,7 +271,7 @@ sequenceDiagram
 BEGIN
 → 驗證：學生已修該課程（course_enrollments）               → NOT_ENROLLED
 → SELECT course_enrollments WHERE (course_id, user_id) FOR UPDATE   ← 每位學生的互斥鎖
-→ SELECT exams ... FOR SHARE；確認在開放時段                → EXAM_NOT_OPEN
+→ SELECT exams ... LOCK IN SHARE MODE；確認在開放時段         → EXAM_NOT_OPEN
 → 若已有 status = 'in_progress' 的作答                      → ATTEMPT_IN_PROGRESS（回傳該 attempt_id）
 → n = COUNT(exam_attempts WHERE exam_id, user_id)
 → 若 n ≥ max_attempts                                      → ATTEMPT_LIMIT_REACHED
@@ -406,7 +462,7 @@ COMMIT
 
 **2. 排程批次處理（P1）**
 
-`bin/finalize_overdue.php` 每分鐘由 cron（Windows 為工作排程器）執行：
+`bin/finalize_overdue.php` 每分鐘由 cron（Windows 為工作排程器）執行。第一步**不加鎖**地挑出候選：
 
 ```sql
 SELECT ea.attempt_id
@@ -415,11 +471,12 @@ JOIN exams e ON e.exam_id = ea.exam_id
 WHERE ea.status = 'in_progress'
   AND LEAST(DATE_ADD(ea.started_at, INTERVAL e.duration_min MINUTE),
             COALESCE(e.end_time, '9999-12-31')) < NOW() - INTERVAL 5 SECOND
-LIMIT 100
-FOR UPDATE OF ea SKIP LOCKED;
+LIMIT 100;
 ```
 
-逐筆（每筆獨立 transaction）執行交卷。`SKIP LOCKED` 讓多個排程同時執行也不會重複處理。處理程序必須**冪等**。
+第二步對每個候選各開一個 transaction：`SELECT ... FROM exam_attempts WHERE attempt_id = ? FOR UPDATE`，**鎖到後重新檢查** `status = 'in_progress'`，仍是才依 §7.5 交卷，否則略過。這樣即使排程與學生交卷、或兩個排程同時執行，也不會重複批改。
+
+不使用 `SKIP LOCKED` / `FOR UPDATE OF`，是因為 XAMPP 的 MariaDB 10.4 不支援（見 [02 §3.8](02-database.md#38-xamppmariadb與-mysql-8-的相容性)）。處理程序必須**冪等**。
 
 ## 13. 收藏與錯題本
 
@@ -435,9 +492,9 @@ FOR UPDATE OF ea SKIP LOCKED;
 | 兩個分頁同時開始作答 | 超過次數上限、同時多個進行中 | 鎖 `course_enrollments` 該列當互斥鎖；`uq_attempt` 唯一鍵為最後防線 |
 | 重複點擊交卷 | 重複批改 | `SELECT ... FOR UPDATE` 鎖 attempt；第二個請求看到非 `in_progress` 直接回傳現有結果 |
 | 暫存與交卷同時送出 | 交卷後答案又被覆寫 | 暫存時同樣鎖 attempt 並檢查狀態 |
-| 老師撤回考卷的同時學生開始作答 | 撤回後卻出現作答 | 撤回鎖 `exams` 該列（`FOR UPDATE`）再檢查作答數；開始作答對 `exams` 取 `FOR SHARE` |
+| 老師撤回考卷的同時學生開始作答 | 撤回後卻出現作答 | 撤回鎖 `exams` 該列（`FOR UPDATE`）再檢查作答數；開始作答對 `exams` 取 `LOCK IN SHARE MODE` |
 | 老師修改題目的同時學生交卷 | 批改使用到改到一半的選項 | 「已被使用」的題目禁止改選項（§4.3）；選項重建在 transaction 內 |
 | 兩位老師／管理員同時編輯同一考卷 | 後者覆蓋前者 | 組卷時鎖 `exams` 該列；整份取代為單一 transaction（P2：以 `updated_at` 做樂觀鎖） |
-| 逾時排程與學生交卷同時發生 | 重複批改 | 兩者都先鎖 attempt；`SKIP LOCKED` 讓排程跳過被鎖定者 |
+| 逾時排程與學生交卷同時發生 | 重複批改 | 兩者都先 `FOR UPDATE` 鎖 attempt，**鎖到後重新檢查狀態**，已非 `in_progress` 就略過 |
 
 原則：**用 constraint 保證唯一性、用 `FOR UPDATE` 保證檢查與寫入之間不被插入，不使用「先查再寫」。**

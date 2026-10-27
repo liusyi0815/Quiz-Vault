@@ -12,6 +12,7 @@
 | 時間 | ISO 8601，含時區，例：`2026-11-03T10:30:00+08:00` |
 | 分頁 | `?page=1&per_page=20`（預設 20，上限 100），回應 `meta` 帶 `page`、`per_page`、`total` |
 | 角色縮寫 | **S** 學生、**T** 老師、**A** 管理員；`T*` 代表僅限**自己開的課程** |
+| 須先改密碼 | 帳號 `must_change_password = true` 時，除 `GET /me`、`PUT /me/password`、`POST /auth/logout`、`GET /health` 外，所有端點回 `403 PASSWORD_CHANGE_REQUIRED` |
 
 ### 成功回應
 
@@ -48,7 +49,7 @@
 | POST | `/auth/logout` | 登出 | 登入 | F-01 |
 | GET | `/me` | 目前使用者與 `csrf_token` | 登入 | F-02 |
 | PATCH | `/me` | 修改姓名、email | 登入 | F-02 |
-| PUT | `/me/password` | 修改密碼 | 登入 | F-02 |
+| PUT | `/me/password` | 修改密碼（也用於「須先改密碼」時） | 登入 | F-02、F-22 |
 
 ### 2.2 課程、修課、章節
 
@@ -134,6 +135,7 @@
 | GET | `/admin/users` | 使用者列表（`role`、`q`、`is_active`） | A | F-17 |
 | POST | `/admin/users` | 建立老師／管理員帳號 | A | F-17 |
 | PATCH | `/admin/users/{user_id}` | 改角色、停用／啟用 | A | F-17 |
+| POST | `/admin/users/{user_id}/reset-password` | 重設密碼，回傳臨時密碼（只顯示一次） | A | F-22 |
 | GET | `/health` | 服務與資料庫狀態 | — | F-21 |
 
 權限細節與「`T*` 的判定方式」見 [04 §2](04-behavior.md#2-角色與權限矩陣)。
@@ -154,10 +156,13 @@
 {
   "data": {
     "user": { "user_id": 21, "username": "王小明", "email": "s001@example.edu.tw", "role": "student" },
-    "csrf_token": "b7c1…e9"
+    "csrf_token": "b7c1…e9",
+    "must_change_password": false
   }
 }
 ```
+
+`must_change_password` 為 `true` 時，前端應導向「修改密碼」頁面（見 [§3.13](#313-強制修改密碼使用者端)）。`GET /me` 的回應也包含此欄位。
 
 ### 3.2 新增題目（多選題）
 
@@ -413,6 +418,51 @@ body 可選，帶入最後尚未暫存的答案（逾時後送來的答案會被
 }
 ```
 
+### 3.12 管理員重設密碼
+
+`POST /admin/users/24/reset-password`（無 body；需 `X-CSRF-Token`）
+
+`200`
+
+```json
+{
+  "data": {
+    "user_id": 24,
+    "username": "徐若瑜",
+    "temp_password": "Kp7mXw4Rtn2Q",
+    "must_change_password": true
+  }
+}
+```
+
+- `temp_password` **只在這次回應出現**，資料庫只存雜湊，之後無法再查詢；請管理員私下轉交，若遺失就再重設一次。
+- 對自己操作回 `409 CANNOT_MODIFY_SELF`；目標不存在回 `404 NOT_FOUND`；非管理員回 `403 FORBIDDEN`。
+
+### 3.13 強制修改密碼（使用者端）
+
+使用者以臨時密碼登入：`POST /auth/login` 回 `200`，且 `must_change_password` 為 `true`。
+
+此時呼叫其他端點（例如 `GET /courses`）：`403`
+
+```json
+{ "error": { "code": "PASSWORD_CHANGE_REQUIRED", "message": "請先修改密碼" } }
+```
+
+使用者設定新密碼：`PUT /me/password`
+
+```json
+{ "old_password": "Kp7mXw4Rtn2Q", "new_password": "MyNewPass#2026" }
+```
+
+`200`
+
+```json
+{ "data": { "must_change_password": false } }
+```
+
+- 「舊密碼」就是剛才的臨時密碼；舊密碼不對回 `400 WRONG_PASSWORD`。
+- 新密碼長度須 ≥ 8，且不得與舊密碼相同，否則回 `400 VALIDATION_FAILED`。
+
 ## 4. 錯誤碼
 
 ### 4.1 通用
@@ -439,7 +489,8 @@ body 可選，帶入最後尚未暫存的答案（逾時後送來的答案會被
 | 409 | `EMAIL_TAKEN` | email 已被使用 |
 | 400 | `WRONG_PASSWORD` | 修改密碼時舊密碼不正確 |
 | 409 | `LAST_ADMIN` | 不能停用或降級最後一位管理員 |
-| 409 | `CANNOT_MODIFY_SELF` | 管理員不能停用或降級自己 |
+| 409 | `CANNOT_MODIFY_SELF` | 管理員不能停用、降級或重設自己的密碼 |
+| 403 | `PASSWORD_CHANGE_REQUIRED` | 帳號被標記須先改密碼；改完前只能使用 `GET /me`、`PUT /me/password`、`POST /auth/logout` |
 
 ### 4.3 課程與章節
 

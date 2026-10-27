@@ -4,7 +4,7 @@
 
 **技術**：PHP 8.2 + MySQL 8.0 + HTML / CSS / JavaScript（REST API，前後端分離）
 
-> 目前階段：**規劃書**。程式碼尚未開始，規劃文件放在 [`docs/`](docs/)。
+> 目前階段：**規劃書 + 資料庫**。資料庫（`database/`）已完成並在 MariaDB 實測；後端與前端程式尚未開始。規劃文件放在 [`docs/`](docs/)。
 
 ## 規劃書
 
@@ -13,7 +13,7 @@
 | # | 文件 | 內容 | 先讀對象 |
 | --- | --- | --- | --- |
 | 00 | [系統概觀](docs/00-overview.md) | 系統是什麼、系統邊界、名詞定義、使用者類型 | 所有人，先讀這份 |
-| 01 | [功能描述與優先級](docs/01-features.md) | 功能清單 F-01 ~ F-21、規則摘要、P0 ~ P3 | 全員 |
+| 01 | [功能描述與優先級](docs/01-features.md) | 功能清單 F-01 ~ F-22、規則摘要、P0 ~ P3 | 全員 |
 | 02 | [資料庫設計](docs/02-database.md) | 14 張資料表、ER 圖、約束、索引、查詢範例 | 後端、資料庫 |
 | 03 | [端點規劃](docs/03-api.md) | REST API 全表、request / response、錯誤碼 | 後端、前端 |
 | 04 | [行為邏輯](docs/04-behavior.md) | 流程、狀態機、權限矩陣、業務規則 | 後端 |
@@ -35,7 +35,7 @@ quiz-system/
 ├─ public/        # 網站根目錄（前端頁面 + api/index.php）
 ├─ src/           # 後端：Core / Http / Services / Repositories / Domain
 ├─ config/
-├─ database/      # schema.sql、seed.sql、migrations/
+├─ database/      # schema.sql、seed.sql、create_user.sql（已完成）
 ├─ bin/           # 排程腳本
 ├─ tests/
 └─ docs/          # 規劃書
@@ -55,13 +55,15 @@ quiz-system/
 | Markdown Preview Mermaid | 預覽規劃書裡的 ER 圖與狀態機 |
 | Docker、GitLens | 容器管理、Git 歷史 |
 
-### 快速開始
+### 快速開始（XAMPP）
 
-1. 安裝 PHP 8.2+、Composer、MySQL 8（或直接安裝 XAMPP / Docker Desktop）。
-2. `cp .env.example .env`，填入資料庫帳密。
-3. 建立資料庫並匯入 `database/schema.sql`、`database/seed.sql`。
-4. `Ctrl+Shift+B` 執行 **Dev Server**，開啟 <http://localhost:8000>。
-5. 用 `tests/api/01-auth-and-exam.http` 逐段送出請求測試 API。
+1. 啟動 XAMPP 的 **Apache** 與 **MySQL**（其實是 MariaDB）。
+2. 開啟 <http://localhost/phpmyadmin>，依序匯入 `database/schema.sql`、`database/seed.sql`。
+   步驟圖文與指令版見 [`database/README.md`](database/README.md)。
+3. 複製 `.env.example` 為 `.env`；XAMPP 預設 `root` 無密碼，可先把 `DB_USER=root`、`DB_PASS=` 留空，之後再改用 `database/create_user.sql` 建立的低權限帳號。
+4. 安裝 PHP 8.2+ 與 Composer 後執行 `composer install`。
+5. `Ctrl+Shift+B` 執行 **Dev Server**，開啟 <http://localhost:8000>。
+6. 用 `tests/api/01-auth-and-exam.http` 逐段送出請求測試 API（測試帳號密碼 `Test1234!`）。
 
 > `public/router.php` 只供 `php -S` 開發用；Apache / XAMPP 環境走 `public/api/.htaccess`。
 
@@ -83,7 +85,7 @@ quiz-system/
 
 ## 本機環境（預計）
 
-- PHP 8.2+、MySQL 8.0.16+、Apache（XAMPP 即可）
+- PHP 8.2+、MySQL 8.0.16+ 或 MariaDB 10.4+、Apache（**XAMPP 即可**）
 - 或使用 Docker Compose，見 [05 §9](docs/05-architecture.md#9-部署)
 
 ## 組員

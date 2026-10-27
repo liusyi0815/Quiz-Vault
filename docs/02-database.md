@@ -1,6 +1,6 @@
 # 02 資料庫設計
 
-MySQL 8.0，資料庫名 `quiz_system`，儲存引擎 InnoDB，字元集 `utf8mb4`（排序 `utf8mb4_unicode_ci`）。完整建表語法放在 `database/schema.sql`，本文件說明結構、關係與設計取捨。
+MySQL 8.0.16+ 或 **XAMPP 內建的 MariaDB 10.4+**，資料庫名 `quiz_system`，儲存引擎 InnoDB，字元集 `utf8mb4`（排序 `utf8mb4_unicode_ci`）。完整建表語法在 [`database/schema.sql`](../database/schema.sql)，測試資料在 [`database/seed.sql`](../database/seed.sql)，匯入方式見 [`database/README.md`](../database/README.md)。本文件說明結構、關係與設計取捨。
 
 ## 1. 資料表總覽
 
@@ -27,7 +27,7 @@ MySQL 8.0，資料庫名 `quiz_system`，儲存引擎 InnoDB，字元集 `utf8mb
 
 | 資料表 | 關鍵欄位 |
 | --- | --- |
-| `users` | `user_id` PK、`email` UNIQUE、`password_hash`、`role`、`is_active` |
+| `users` | `user_id` PK、`email` UNIQUE、`password_hash`、`role`、`is_active`、`must_change_password` |
 | `courses` | `course_id` PK、`teacher_id` FK → users |
 | `course_enrollments` | `(course_id, user_id)` PK、`enrolled_at` |
 | `chapters` | `chapter_id` PK、`course_id` FK、`sort_order` |
@@ -43,10 +43,10 @@ MySQL 8.0，資料庫名 `quiz_system`，儲存引擎 InnoDB，字元集 `utf8mb
 
 ### 1.3 共用慣例
 
-- 主鍵使用 `INT AUTO_INCREMENT`，命名為 `<表名單數>_id`；純關聯表使用複合主鍵。
+- 主鍵使用 `INT UNSIGNED AUTO_INCREMENT`，命名為 `<表名單數>_id`；純關聯表使用複合主鍵。
 - 列舉欄位使用 `ENUM`，新增值須經 schema 變更審查。
 - 布林欄位使用 `TINYINT(1)`，`1` 為真。
-- `created_at` 使用 `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`；考試時間欄位使用 `DATETIME`。
+- 所有時間欄位一律使用 `DATETIME`（`created_at` 預設 `CURRENT_TIMESTAMP`），不用 `TIMESTAMP`，避免 MariaDB 舊版對第一個 TIMESTAMP 欄位自動加上 `ON UPDATE` 的行為，也沒有 2038 年問題。
 - **時區**：PDO 連線後執行 `SET time_zone = '+08:00'`，PHP 設定 `Asia/Taipei`；API 輸出 ISO 8601（含 `+08:00`）。
 - 所有表使用 InnoDB，否則外鍵與 transaction 無效。
 - 密碼只存 `password_hash()` 的結果，`VARCHAR(255)`。
@@ -119,12 +119,11 @@ erDiagram
 
 ### 3.1 約束（CHECK 與唯一鍵）
 
-MySQL 8.0.16 起才會實際執行 `CHECK`，請使用 8.0.16 以上版本。
+`CHECK` 在 MySQL 8.0.16+ 與 MariaDB 10.2.1+ 才會實際執行（舊版 MySQL 5.7 會**默默忽略**）。以下約束都已寫在 `schema.sql` 的 `CREATE TABLE` 內，這裡列出以便對照：
 
 ```sql
--- users
-ALTER TABLE users
-  ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER role;
+-- users：另有 is_active TINYINT(1) NOT NULL DEFAULT 1（停用帳號，不實體刪除）
+--        與 must_change_password TINYINT(1) NOT NULL DEFAULT 0（1 = 登入後必須先改密碼，F-22）
 
 -- questions
 ALTER TABLE questions
@@ -155,7 +154,7 @@ ALTER TABLE attempt_answers
 | `exam_attempts (exam_id, user_id, attempt_no)` | 保證序號不重複，並在併發下作為最後防線 |
 | `attempt_answers (attempt_id, question_id)` | 一次作答中每題只有一筆，支援 `INSERT ... ON DUPLICATE KEY UPDATE` 暫存 |
 
-> 以下兩項與初版 schema 相比是**新增**的：`users.is_active`（停用帳號，因為使用者有歷史外鍵不能硬刪）與上述 CHECK 約束。
+> `users.is_active`（使用者有歷史外鍵不能硬刪，只能停用）、`users.must_change_password`（F-22）與上述 CHECK 約束，是相較於最初草案**新增**的。已匯入舊版 `schema.sql` 的資料庫，可執行 [`database/migrations/001_add_must_change_password.sql`](../database/migrations/001_add_must_change_password.sql)，或直接重新匯入 `schema.sql` + `seed.sql`。
 
 ### 3.2 索引
 
@@ -264,19 +263,20 @@ WHERE ea.exam_id = ? AND ea.status = 'graded';
 
 ### 3.6 測試資料（seed）
 
-每張資料表至少 10 筆，方便展示 JOIN 與統計。建議規模：
+主檔類（課程、考卷）數量較少，明細與交易類資料表都在 10 筆以上，足夠展示 JOIN 與統計。實際規模：
 
 | 資料 | 數量 |
 | --- | --- |
-| 使用者 | 1 位管理員、3 位老師、20 位學生 |
-| 課程 / 章節 | 3 門課、12 個章節 |
-| 題目 | 60 題，四種題型都有，難度分佈 1 / 2 / 3 |
-| 標籤 | 12 個，題目與標籤約 100 筆關聯 |
-| 考卷 | 4 份：草稿、進行中、已關閉各至少 1 份 |
-| 作答 | 約 40 次，包含作答中、已交卷、已批改三種狀態 |
-| 收藏 | 約 15 筆 |
+| 使用者 | 24 位：1 位管理員、3 位老師、20 位學生 |
+| 課程 / 章節 | 4 門課、14 個章節 |
+| 修課 | 43 筆 |
+| 題目 / 選項 | 40 題（單選、多選、是非、簡答都有，難度 1 / 2 / 3）、120 個選項 |
+| 標籤 | 12 個，題目與標籤 53 筆關聯 |
+| 考卷 | 6 份：草稿 1、已發佈 3（含一份尚未開放）、已關閉 2；共 49 筆題目配置 |
+| 作答 | 39 次：作答中 2、已交卷待評分 6、已批改 31；共 310 筆作答明細、318 筆勾選選項 |
+| 收藏 | 16 筆 |
 
-`database/seed.sql` 內的密碼雜湊用 PHP 的 `password_hash()` 預先產生，並在 README 註明測試帳號。
+所有測試帳號密碼皆為 `Test1234!`（雜湊為 bcrypt `$2y$`，可直接被 PHP 的 `password_verify()` 驗證）。其中 `s020@example.edu.tw`（user_id 24）被標記為「須先改密碼」，用來測試 F-22 流程。測試帳號與各情境的位置見 [`database/README.md`](../database/README.md)。作答中（`in_progress`）的兩筆以 `NOW()` 起算，匯入後約 30 分鐘內可測試續答。
 
 ### 3.7 擴充預留
 
@@ -288,3 +288,22 @@ WHERE ea.exam_id = ? AND ea.status = 'graded';
 | 題目錯誤回報 | 新增 `question_reports` |
 | 登入紀錄 | 新增 `login_logs` |
 | 簡答題評語 | `attempt_answers` 新增 `grader_comment TEXT` |
+| 忘記密碼（Email 重設連結） | 新增 `password_resets (token_hash, user_id, expires_at, used_at)`；需要寄信 |
+| 重設密碼後立即踢出既有登入 | `users` 新增 `password_changed_at DATETIME`，登入時記錄於 session，不一致就視為失效 |
+
+### 3.8 XAMPP（MariaDB）與 MySQL 8 的相容性
+
+XAMPP 內建的「MySQL」其實是 **MariaDB**（XAMPP 8.x 多為 10.4）。本專案的 SQL 同時以 MariaDB 10.11 實測過，並刻意避開兩者不同的語法：
+
+| 項目 | MySQL 8.0 | MariaDB 10.4（XAMPP） | 本專案的做法 |
+| --- | --- | --- | --- |
+| `CHECK` 約束 | 8.0.16+ 生效 | 10.2.1+ 生效 | 直接使用；違反時錯誤碼分別為 `3819` / `4025` |
+| 共享鎖 | `FOR SHARE` | 不支援，要用 `LOCK IN SHARE MODE` | 一律寫 `LOCK IN SHARE MODE`（兩邊都支援） |
+| `SKIP LOCKED` | 8.0.1+ | 10.6+ | **不使用**，逾時處理改成「先挑候選、逐筆鎖定並重新檢查」 |
+| `FOR UPDATE OF 表名` | 8.0.1+ | 不支援 | 不使用 |
+| 預設排序規則 | `utf8mb4_0900_ai_ci` | `utf8mb4_general_ci` | 明確指定 `utf8mb4_unicode_ci` |
+| `TIMESTAMP` 預設行為 | 不自動 `ON UPDATE` | 10.9 以前第一個 TIMESTAMP 欄位會自動加 | 時間欄位全用 `DATETIME` |
+| `ORDER BY RAND()`、`DECIMAL`、`ENUM`、`ON DUPLICATE KEY UPDATE` | 支援 | 支援 | 直接使用 |
+
+若之後要部署到 MySQL 8 或 Docker 的 `mysql:8.0` 映像檔，不需要改任何 SQL。
+

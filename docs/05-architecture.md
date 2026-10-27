@@ -5,7 +5,7 @@
 | 項目 | 選用 | 理由 |
 | --- | --- | --- |
 | 後端語言 | PHP 8.2 以上（`declare(strict_types=1)`） | 課程指定；8.x 有型別、`match`、具名參數 |
-| 資料庫 | MySQL 8.0.16 以上 | 需要 `CHECK` 實際生效、`SKIP LOCKED`、`FOR UPDATE OF` |
+| 資料庫 | **XAMPP 內建 MariaDB 10.4+**，或 MySQL 8.0.16+ | `CHECK` 需實際生效（MariaDB 10.2.1+ / MySQL 8.0.16+）；相容性見 [02 §3.8](02-database.md#38-xamppmariadb與-mysql-8-的相容性) |
 | DB 存取 | PDO（`pdo_mysql`） + Prepared Statement | 防 SQL Injection；不使用 ORM，SQL 清楚可展示 |
 | Web Server | Apache 2.4（`mod_rewrite`） | XAMPP 內建；以 `.htaccess` 轉送 API |
 | 前端 | HTML5、CSS3、JavaScript（ES Modules）、Bootstrap 5 | 靜態頁面以 `fetch` 呼叫 API；不需前端建置工具 |
@@ -40,7 +40,7 @@ quiz-system/
 │  ├─ Core/                     # Router、Request、Response、Database、Session、Config、Validator
 │  ├─ Http/
 │  │  ├─ Controllers/           # 每個 domain 一個 Controller
-│  │  └─ Middleware/            # Auth、Csrf、Role
+│  │  └─ Middleware/            # Auth、MustChangePassword、Csrf、Role
 │  ├─ Services/                 # 業務規則與 transaction 邊界
 │  ├─ Repositories/             # 所有 SQL
 │  ├─ Domain/                   # 純邏輯：AttemptDeadline、Exam 狀態判斷、題型規則
@@ -75,7 +75,7 @@ quiz-system/
 HTTP 請求
   → public/api/index.php
   → Router（比對方法與路徑，建立 middleware 鏈）
-  → Middleware：Auth → Csrf → Role
+  → Middleware：Auth → MustChangePassword → Csrf → Role
   → Controller   （解析輸入、驗證格式、呼叫 Service、輸出 Response）
   → Service      （業務規則、擁有權檢查、transaction 邊界）
   → Repository   （PDO 與 SQL）
@@ -166,6 +166,8 @@ $pdo->exec("SET time_zone = '+08:00'");
 | SQL Injection | 全部使用 Prepared Statement；`LIMIT`、排序欄位等無法綁定的動態部分只能來自程式內白名單 |
 | XSS | API 只回 JSON；前端以 `textContent` 顯示使用者內容，**不使用 `innerHTML` 拼接題目與答案**；PHP 若輸出 HTML 一律 `htmlspecialchars()` |
 | 答案外洩 | 學生端 Serializer 與老師端分離；整合測試明確驗證學生的作答回應不含 `is_correct` |
+| 臨時密碼 | 管理員重設時以 `random_int()` 產生 12 碼，**只回傳一次**；資料庫只存雜湊；不寫 log；回應加 `Cache-Control: no-store` |
+| 強制改密碼 | `MustChangePassword` middleware：旗標為 1 時只放行改密碼、查自己、登出 |
 | 權限 | Middleware 檢查角色，Service 檢查擁有權；兩層都要通過 |
 | 輸入驗證 | Controller 以 `Validator` 檢查型別、長度、列舉值；失敗統一 `VALIDATION_FAILED` |
 | 登入防爆破 | P2：同一 email／IP 連續失敗後短暫鎖定 |
@@ -179,7 +181,7 @@ $pdo->exec("SET time_zone = '+08:00'");
 - P1：`php bin/finalize_overdue.php`，每分鐘執行一次。
   - Linux：`* * * * * php /var/www/quiz-system/bin/finalize_overdue.php`
   - Windows / XAMPP：工作排程器每分鐘執行 `php.exe`。
-- 腳本必須**冪等**；每筆作答獨立 transaction；以 `FOR UPDATE OF ea SKIP LOCKED` 避免多個執行個體重複處理。
+- 腳本必須**冪等**；每筆作答獨立 transaction，先 `SELECT ... FOR UPDATE` 鎖住該筆並重新檢查狀態，避免多個執行個體重複處理（不使用 MariaDB 10.4 不支援的 `SKIP LOCKED`）。
 - 腳本結束時輸出處理筆數，方便觀察。
 
 ## 7. 錯誤處理
@@ -204,7 +206,7 @@ $pdo->exec("SET time_zone = '+08:00'");
 | 1062 — `course_enrollments` 主鍵 | 重複修課 | `ALREADY_ENROLLED` |
 | 1451 Cannot delete parent row | 刪除被引用的資料 | 依資料表轉 `COURSE_NOT_EMPTY`、`CHAPTER_NOT_EMPTY`、`QUESTION_IN_USE` |
 | 1452 Cannot add child row | 外鍵指向不存在 | `VALIDATION_FAILED`（或 `NOT_FOUND`） |
-| 3819 Check constraint violated | CHECK 失敗 | `VALIDATION_FAILED` |
+| 3819（MySQL）／4025（MariaDB）Check constraint violated | CHECK 失敗 | `VALIDATION_FAILED` |
 | 1213 Deadlock | 死結 | Service 重試最多 2 次，仍失敗才 `500` |
 
 Log 寫到 `storage/logs/app-YYYY-MM-DD.log`，每個請求帶 `request_id`；log 內不得出現密碼、session id 與 CSRF token。
@@ -217,7 +219,7 @@ Log 寫到 `storage/logs/app-YYYY-MM-DD.log`，每個請求帶 `request_id`；lo
 | 整合 | Repository／Service 對真實 MySQL：批改（四種題型、全對／漏選／多選／未作答）、次數上限、transaction 回滾、FK RESTRICT 防護 | PHPUnit + `quiz_system_test` |
 | API | 以 `php -S` 或 Apache 起服務，用 HTTP 客戶端走完整流程；每個端點的權限（401 / 403 / 404） | PHPUnit（Guzzle）或 Postman collection |
 | 併發 | 同時開始作答、重複交卷、暫存與交卷競爭、撤回與開始競爭 | 多個 PDO 連線／多個 `curl` 同時送出 |
-| 資料庫約束 | schema 套到空白 DB 全部成功；CHECK、UNIQUE、FK 的違反案例會被擋下 | PHPUnit |
+| 資料庫約束 | schema 套到空白 DB 全部成功；CHECK、UNIQUE、FK 的違反案例會被擋下（已有 `schema.sql` + `seed.sql` 的實測結果） | PHPUnit |
 | 手動驗收 | 依 [01](01-features.md) 的功能逐項走流程；各角色畫面 | 檢核表 |
 
 **測試資料庫**：獨立的 `quiz_system_test`；每個測試類別前載入 `schema.sql` 與最小 fixture，每個測試用 transaction 包住並於結束 rollback（併發測試例外，改用事後清表）。**不使用 SQLite 取代 MySQL。**
@@ -247,7 +249,7 @@ Log 寫到 `storage/logs/app-YYYY-MM-DD.log`，每個請求帶 `request_id`；lo
    RewriteRule ^v1/(.*)$ index.php [QSA,L]
    ```
 
-3. 以 phpMyAdmin 或指令建立資料庫，匯入 `database/schema.sql`、`database/seed.sql`。
+3. 以 phpMyAdmin 或指令匯入 `database/schema.sql`、`database/seed.sql`，步驟見 [`database/README.md`](../database/README.md)。XAMPP 的 MySQL 實際是 MariaDB，相容性見 [02 §3.8](02-database.md#38-xamppmariadb與-mysql-8-的相容性)。
 4. 複製 `.env.example` 為 `.env` 並填入資料庫帳密；`composer install`。
 
 ### 9.2 Docker Compose（選用）

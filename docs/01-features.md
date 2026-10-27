@@ -36,6 +36,7 @@
 | F-19 | 題目匯入（CSV） | 老師 | P2 |
 | F-20 | 擴充功能：公告、題目錯誤回報、登入紀錄 | 全部 | P3 |
 | F-21 | 健康檢查 | 維運 | P1 |
+| F-22 | 管理員重設密碼 | 管理員 | P1 |
 
 ---
 
@@ -52,6 +53,7 @@
 - 密碼以 `password_hash()` 儲存，登入用 `password_verify()`；不得出現在任何 response 或 log。
 - 登入成功後 `session_regenerate_id(true)`，並產生 CSRF token（見 [05 §5](05-architecture.md#5-認證與安全)）。
 - 登入失敗一律回同一種訊息，不透露「帳號不存在」或「密碼錯誤」。
+- 帳號若標記為「須先改密碼」（`must_change_password = 1`），登入仍會成功，response 帶 `must_change_password: true`；在改密碼之前只能使用 `GET /me`、`PUT /me/password`、`POST /auth/logout`（見 F-22）。
 
 **端點**：`POST /auth/register`、`POST /auth/login`、`POST /auth/logout`
 
@@ -63,7 +65,7 @@
 
 **規則摘要**
 - `GET /me` 同時回傳 `csrf_token`，前端於所有寫入請求帶入。
-- 修改密碼需提供舊密碼；成功後重新產生 session id。
+- 修改密碼需提供舊密碼；新密碼長度 ≥ 8 且**不得與舊密碼相同**；成功後重新產生 session id，並清除「須先改密碼」旗標（見 F-22）。
 - email 修改後仍須維持唯一（`EMAIL_TAKEN`）。
 
 **端點**：`GET /me`、`PATCH /me`、`PUT /me/password`
@@ -273,6 +275,8 @@
 **規則摘要**
 - 不能停用或降級自己；系統至少保留一位啟用中的管理員（`LAST_ADMIN`）。
 - 使用者不實體刪除（有外鍵歷史），改以 `is_active = 0` 停用，停用後無法登入（`ACCOUNT_DISABLED`）。
+- 管理員建立的新帳號預設標記「須先改密碼」，使用者首次登入必須改掉管理員設定的初始密碼。
+- 使用者忘記密碼時，由管理員重設，見 [F-22](#f-22-管理員重設密碼--p1)。
 
 **端點**：`GET /admin/users`、`POST /admin/users`、`PATCH /admin/users/{user_id}`
 
@@ -310,6 +314,7 @@
 | `announcements` | 課程公告 |
 | `question_reports` | 學生回報題目錯誤，老師處理 |
 | `login_logs` | 登入紀錄，供稽核 |
+| 忘記密碼（Email 重設連結） | 新增 `password_resets` 資料表；需要寄信（PHPMailer + SMTP） |
 | 多老師共同授課 | 新增 `course_teachers` 關聯表取代 `courses.teacher_id` |
 | 部分給分 | 多選題依答對比例給分 |
 | 題目／選項隨機排序 | 每次作答獨立亂序 |
@@ -321,3 +326,23 @@
 **描述**：`GET /health` 回傳服務存活與資料庫連線狀態，供部署後 smoke test 使用。
 
 **端點**：`GET /health`
+
+---
+
+## F-22 管理員重設密碼 — P1
+
+**描述**：使用者忘記密碼時，由管理員為其重設。系統產生一組隨機的臨時密碼，使用者以臨時密碼登入後，必須先自行改成新密碼，才能使用其他功能。本系統**不提供**「忘記密碼」的自助 Email 流程（列為擴充，見 F-20）。
+
+**使用者故事**
+- 身為學生，我忘記密碼，聯絡管理員；管理員把臨時密碼告訴我，我登入後被要求立刻設定新密碼。
+- 身為管理員，我在使用者列表按「重設密碼」，看到一組**只顯示一次**的臨時密碼，私下轉交給使用者。
+
+**規則摘要**（流程見 [04 §3.5](04-behavior.md#35-管理員重設密碼)）
+- 僅管理員可用；**不能重設自己的密碼**（`CANNOT_MODIFY_SELF`），自己改密碼請用 F-02。
+- 臨時密碼 12 碼，由伺服器以密碼學安全的亂數產生，並排除 `0/O`、`1/l/I` 等易混淆字元；**只在這次 response 回傳一次**，資料庫只存雜湊，也不寫入 log。
+- 重設後 `must_change_password = 1`：使用者登入後，在改密碼之前只能使用 `GET /me`、`PUT /me/password`、`POST /auth/logout`，其他端點回 `PASSWORD_CHANGE_REQUIRED`（狀態機見 [04 §3.6](04-behavior.md#36-須先改密碼的狀態)）。
+- 使用者改密碼成功後旗標清除，才恢復正常使用。
+- 已停用（`is_active = 0`）的帳號也可重設，但仍無法登入，直到重新啟用。
+- **限制**：目標使用者既有的 session 不會被立即登出，最長在閒置逾時（`SESSION_LIFETIME`，預設 2 小時）後失效。若要立即失效，需新增 `password_changed_at` 欄位（P2，見 [02 §3.7](02-database.md#37-擴充預留)）。
+
+**端點**：`POST /admin/users/{user_id}/reset-password`
