@@ -3,7 +3,13 @@
 | 檔案 | 說明 |
 | --- | --- |
 | `schema.sql` | 建立資料庫 `quiz_system` 與 14 張資料表（會先 DROP 同名資料表，**開發用**） |
-| `seed_01_users_courses.sql` | **分階段 ①**：只有 `users`（24 位）與 `courses`（4 門），先從這兩張表開始開發時使用 |
+| `seed_01_users_courses.sql` | **分階段 ①**：`users`（24 位）、`courses`（4 門） |
+| `seed_02_enroll_chapters_tags.sql` | 分階段 ②：`course_enrollments`、`chapters`、`tags` |
+| `seed_03_questions.sql` | 分階段 ③：`questions`、`question_options`、`question_tags` |
+| `seed_04_exams.sql` | 分階段 ④：`exams`、`exam_questions` |
+| `seed_05_attempts.sql` | 分階段 ⑤：`exam_attempts`、`attempt_answers`、`attempt_answer_options` |
+| `seed_06_bookmarks.sql` | 分階段 ⑥：`bookmarks` |
+| `seed_exam_questions_only.sql` | **只補 `exam_questions`**（49 筆）：考卷 1~6 與題目 1~40 已存在、只缺這張表時使用 |
 | `seed_production.sql` | **正式環境用**：只建立一個管理員帳號（首次登入須改密碼），不含任何假資料 |
 | `seed.sql` | 開發 / 展示用完整測試資料：24 位使用者、4 門課、40 題、6 份考卷、39 次作答（會清空 14 張表後重建） |
 | `migrations/001_add_must_change_password.sql` | 給已匯入舊版 schema 的資料庫補上 `users.must_change_password`（F-22）；重新匯入 `schema.sql` 也可 |
@@ -40,6 +46,23 @@ mysql -u root --default-character-set=utf8mb4 < database/seed.sql
 ```
 
 XAMPP 預設 `root` **沒有密碼**；若你設定過，指令加上 `-p`。
+
+## 分階段匯入（一張一張補資料）
+
+依序匯入 `schema.sql` → `seed_01` → `seed_02` → … → `seed_06`，**順序不能換**，因為外鍵要求被參照的資料必須先存在：
+
+```
+seed_01 users, courses
+   └─ seed_02 course_enrollments, chapters, tags
+        └─ seed_03 questions, question_options, question_tags
+             └─ seed_04 exams, exam_questions
+                  └─ seed_05 exam_attempts, attempt_answers, attempt_answer_options
+             └─ seed_06 bookmarks
+```
+
+- 每個檔案都包在 transaction 內，前置資料不足時會被外鍵擋下，**整個檔案不會留下半套資料**。
+- 全部依序匯入的結果，與一次匯入 `seed.sql` 完全相同（已逐列比對）。
+- 要重來就從 `schema.sql` 重新開始。
 
 ## 測試帳號與密碼
 
