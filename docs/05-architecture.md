@@ -303,6 +303,23 @@ volumes:
 - **部署順序**：備份 → 套 migration → 更新程式 → smoke test（`GET /health`、登入、查課程列表）。
 - `GET /health` 回傳存活與一次 `SELECT 1` 的結果；`storage/logs` 目錄須可寫入，且不在 `public/` 內。
 
+### 9.4 上線前檢查清單
+
+| # | 項目 | 說明 |
+| --- | --- | --- |
+| 1 | **不要用 XAMPP 直接對外** | XAMPP 預設 MySQL `root` **沒有密碼**、phpMyAdmin 無保護，只適合本機開發。正式環境請用 Linux 主機（LAMP）、VPS 或支援 PHP + MySQL 的虛擬主機 |
+| 2 | 只匯入 `schema.sql` + `seed_production.sql` | 不匯入含假帳號的 `seed.sql`；改 `@admin_email`，建議自己產生管理員雜湊 |
+| 3 | 管理員首次登入立刻改密碼 | `must_change_password = 1` 已強制；之後把密碼存進密碼管理器 |
+| 4 | 資料庫帳號 | 網站用 `quiz_app`（只有 SELECT / INSERT / UPDATE / DELETE，強密碼）；`root` 設強密碼且不對外 |
+| 5 | MySQL 3306 埠不對外開放 | 防火牆只開 80 / 443（與 SSH） |
+| 6 | phpMyAdmin | 不要安裝在正式站，或限制只允許你的 IP／走 SSH 通道 |
+| 7 | HTTPS | 申請憑證（Let's Encrypt），Session Cookie 啟用 `secure`，HTTP 轉址到 HTTPS |
+| 8 | `.env` | 不進版控、檔案權限限制；`APP_ENV=production`、`APP_DEBUG=false`、`display_errors=Off` |
+| 9 | DocumentRoot 指向 `public/` | `src/`、`config/`、`database/`、`.env` 不可被網址直接存取 |
+| 10 | 刪除開發用檔案 | `public/router.php`、`tests/`、`database/seed.sql` 與任何 `credentials*.csv` 不要放到正式主機 |
+| 11 | 備份 | 每日 `mysqldump --single-transaction`，並實際演練還原一次 |
+| 12 | 密碼清單 | `credentials-private.csv` 只留在自己電腦或密碼管理員，不上傳 GitHub、不貼進群組 |
+
 ## 10. 程式碼慣例
 
 - 所有 PHP 檔案 `declare(strict_types=1);`，遵循 PSR-12，PSR-4 命名空間 `App\`。

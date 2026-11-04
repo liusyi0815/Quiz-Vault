@@ -63,7 +63,7 @@ quiz-system/
 3. 複製 `.env.example` 為 `.env`；XAMPP 預設 `root` 無密碼，可先把 `DB_USER=root`、`DB_PASS=` 留空，之後再改用 `database/create_user.sql` 建立的低權限帳號。
 4. 安裝 PHP 8.2+ 與 Composer 後執行 `composer install`。
 5. `Ctrl+Shift+B` 執行 **Dev Server**，開啟 <http://localhost:8000>。
-6. 用 `tests/api/01-auth-and-exam.http` 逐段送出請求測試 API（測試帳號密碼 `Test1234!`）。
+6. 用 `tests/api/01-auth-and-exam.http` 逐段送出請求測試 API（測試帳號與各自的密碼在 `credentials-private.csv`，由專案負責人私下提供，**不放在 repo**）。
 
 > `public/router.php` 只供 `php -S` 開發用；Apache / XAMPP 環境走 `public/api/.htaccess`。
 

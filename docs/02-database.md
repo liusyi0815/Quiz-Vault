@@ -276,7 +276,7 @@ WHERE ea.exam_id = ? AND ea.status = 'graded';
 | 作答 | 39 次：作答中 2、已交卷待評分 6、已批改 31；共 310 筆作答明細、318 筆勾選選項 |
 | 收藏 | 16 筆 |
 
-所有測試帳號密碼皆為 `Test1234!`（雜湊為 bcrypt `$2y$`，可直接被 PHP 的 `password_verify()` 驗證）。其中 `s020@example.edu.tw`（user_id 24）被標記為「須先改密碼」，用來測試 F-22 流程。測試帳號與各情境的位置見 [`database/README.md`](../database/README.md)。作答中（`in_progress`）的兩筆以 `NOW()` 起算，匯入後約 30 分鐘內可測試續答。
+**每位使用者各自有一組隨機密碼與獨立的 bcrypt 雜湊**（`$2y$`，可直接被 PHP 的 `password_verify()` 驗證）；密碼明碼不放在 repo，另存於 `credentials-private.csv`（已列入 `.gitignore`）。展示資料含 24 個假帳號，**正式上線請改用 `seed_production.sql`**（只建立一個管理員）。其中 `s020@example.edu.tw`（user_id 24）被標記為「須先改密碼」，用來測試 F-22 流程。測試帳號與各情境的位置見 [`database/README.md`](../database/README.md)。作答中（`in_progress`）的兩筆以 `NOW()` 起算，匯入後約 30 分鐘內可測試續答。
 
 ### 3.7 擴充預留
 

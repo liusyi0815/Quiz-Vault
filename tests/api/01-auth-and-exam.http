@@ -7,7 +7,7 @@
 POST {{host}}/auth/login
 Content-Type: application/json
 
-{ "email": "teacher1@example.edu.tw", "password": "Test1234!" }
+{ "email": "teacher1@example.edu.tw", "password": "<從 credentials-private.csv 取得 teacher1 的密碼>" }
 
 ###
 @csrf = {{login.response.body.data.csrf_token}}

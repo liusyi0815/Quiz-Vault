@@ -4,7 +4,8 @@
 | --- | --- |
 | `schema.sql` | 建立資料庫 `quiz_system` 與 14 張資料表（會先 DROP 同名資料表，**開發用**） |
 | `seed_01_users_courses.sql` | **分階段 ①**：只有 `users`（24 位）與 `courses`（4 門），先從這兩張表開始開發時使用 |
-| `seed.sql` | 完整測試資料：24 位使用者、4 門課、40 題、6 份考卷、39 次作答（會清空 14 張表後重建） |
+| `seed_production.sql` | **正式環境用**：只建立一個管理員帳號（首次登入須改密碼），不含任何假資料 |
+| `seed.sql` | 開發 / 展示用完整測試資料：24 位使用者、4 門課、40 題、6 份考卷、39 次作答（會清空 14 張表後重建） |
 | `migrations/001_add_must_change_password.sql` | 給已匯入舊版 schema 的資料庫補上 `users.must_change_password`（F-22）；重新匯入 `schema.sql` 也可 |
 | `create_user.sql` | 建立網站用的低權限帳號 `quiz_app`（建議） |
 
@@ -40,15 +41,26 @@ mysql -u root --default-character-set=utf8mb4 < database/seed.sql
 
 XAMPP 預設 `root` **沒有密碼**；若你設定過，指令加上 `-p`。
 
-## 測試帳號
+## 測試帳號與密碼
 
-所有帳號密碼皆為 **`Test1234!`**
+測試資料（`seed.sql`、`seed_01_users_courses.sql`）裡的 24 個帳號，**每個人都有各自的隨機密碼與獨立雜湊**。密碼明碼不放在 repo，而是在另外一份 `credentials-private.csv`（已列入 `.gitignore`，請勿上傳 GitHub、勿貼到群組）。
 
 | 角色 | Email |
 | --- | --- |
 | 管理員 | `admin@example.edu.tw` |
 | 老師 | `teacher1@example.edu.tw`（開「資料庫與網頁設計」與「PHP 程式設計」）、`teacher2@…`、`teacher3@…` |
 | 學生 | `s001@example.edu.tw` ~ `s020@example.edu.tw`（**s020 被標記為須先改密碼**，用來測試 F-22） |
+
+## 正式上線（真的架到網路上）
+
+**不要**匯入 `seed.sql`：它有 24 個假帳號，雖然密碼不公開，仍不該出現在正式站。改用：
+
+1. 匯入 `schema.sql`。
+2. 開啟 `seed_production.sql`，把 `@admin_email` 改成你的真實 email，（建議）把 `@admin_hash` 換成你自己產生的雜湊：
+   `php -r "echo password_hash('你自己的密碼', PASSWORD_DEFAULT);"`
+3. 匯入 `seed_production.sql`。這會建立一個管理員，`must_change_password = 1`，第一次登入就必須改掉初始密碼。
+4. 其他老師帳號由管理員登入後在系統內建立（F-17），學生可自行註冊。
+5. 建立低權限資料庫帳號（`create_user.sql`），並完成 [05 §9.4 上線前檢查清單](../docs/05-architecture.md#94-上線前檢查清單)。
 
 ## 測試資料裡有哪些情境
 
