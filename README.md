@@ -4,7 +4,7 @@
 
 **技術**：PHP 8.2 + MySQL 8.0 + HTML / CSS / JavaScript（REST API，前後端分離）
 
-> 目前階段：**規劃書 + 資料庫**。資料庫（`database/`）已完成並在 MariaDB 實測；後端與前端程式尚未開始。規劃文件放在 [`docs/`](docs/)。
+> 目前階段：**規劃書 + 資料庫 + 後端 M0～M1**。資料庫（`database/`）與後端的基礎骨架、註冊／登入／登出／改密碼、管理員重設密碼（F-22）已完成並實測；課程、題庫、考卷、作答（M2 之後）與前端頁面尚未開始。規劃文件放在 [`docs/`](docs/)。
 
 ## 規劃書
 
@@ -33,7 +33,7 @@
 ```text
 quiz-system/
 ├─ public/        # 網站根目錄（前端頁面 + api/index.php）
-├─ src/           # 後端：Core / Http / Services / Repositories / Domain
+├─ src/           # 後端：Core / Http / Services / Repositories / Serializers / Support
 ├─ config/
 ├─ database/      # schema.sql、seed.sql、create_user.sql（已完成）
 ├─ bin/           # 排程腳本
@@ -58,12 +58,37 @@ quiz-system/
 ### 快速開始（XAMPP）
 
 1. 啟動 XAMPP 的 **Apache** 與 **MySQL**（其實是 MariaDB）。
-2. 開啟 <http://localhost/phpmyadmin>，依序匯入 `database/schema.sql`、`database/seed.sql`。
-   步驟圖文與指令版見 [`database/README.md`](database/README.md)。
-3. 複製 `.env.example` 為 `.env`；XAMPP 預設 `root` 無密碼，可先把 `DB_USER=root`、`DB_PASS=` 留空，之後再改用 `database/create_user.sql` 建立的低權限帳號。
-4. 安裝 PHP 8.2+ 與 Composer 後執行 `composer install`。
-5. `Ctrl+Shift+B` 執行 **Dev Server**，開啟 <http://localhost:8000>。
-6. 用 `tests/api/01-auth-and-exam.http` 逐段送出請求測試 API（測試帳號與各自的密碼在 `credentials-private.csv`，由專案負責人私下提供，**不放在 repo**）。
+2. 開啟 <http://localhost/phpmyadmin>，依序匯入 `database/schema.sql`、`database/seed.sql`。**匯入 seed 前先點左邊的 `quiz_system`**。步驟見 [`database/README.md`](database/README.md)。
+3. 複製 `.env.example` 為 `.env`。XAMPP 剛裝好時 `root` 沒有密碼，預設值可以直接用；之後建議改用 `database/create_user.sql` 建立的 `quiz_app`。
+4. 確認 PHP 在終端機可用：`php -v` 要顯示 8.2 以上。若找不到指令，用 `C:\xampp\php\php.exe`，或把 `C:\xampp\php` 加進 Windows 的 PATH。
+5. 在專案根目錄啟動開發伺服器（VS Code：`Ctrl+Shift+B` 執行 **Dev Server**）：
+
+   ```bat
+   php -S localhost:8000 -t public public/router.php
+   ```
+
+6. 瀏覽器開啟 <http://localhost:8000/api/v1/health>，看到 `"database":"ok"` 就代表 PHP 與資料庫都接上了。
+7. 執行冒煙測試（另開一個終端機）：
+
+   ```bat
+   php tests/smoke_m1.php
+   ```
+
+   測試登入、改密碼要用到管理員帳號，可再加上 `ADMIN_EMAIL` 與 `ADMIN_PASSWORD` 環境變數（密碼在 `credentials-private.csv`）。
+8. 也可以用 `tests/api/01-auth-and-exam.http`（VS Code 的 REST Client）手動送請求。
+
+**改用 XAMPP 的 Apache（不用 `php -S`）：** 把專案放在 `C:\xampp\htdocs\quiz-system`，網址改成 <http://localhost/quiz-system/public/api/v1/health>。`public/api/.htaccess` 需要 Apache 的 `mod_rewrite`（XAMPP 預設已開）。
+
+### 目前已完成的端點
+
+| 方法 | 路徑 | 功能 |
+| --- | --- | --- |
+| GET | `/health` | 健康檢查（含資料庫連線） |
+| POST | `/auth/register` | 學生註冊 |
+| POST | `/auth/login`、`/auth/logout` | 登入、登出 |
+| GET / PATCH | `/me` | 目前使用者、修改姓名／email |
+| PUT | `/me/password` | 修改密碼 |
+| POST | `/admin/users/{user_id}/reset-password` | 管理員重設密碼（F-22） |
 
 > `public/router.php` 只供 `php -S` 開發用；Apache / XAMPP 環境走 `public/api/.htaccess`。
 

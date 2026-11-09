@@ -10,6 +10,12 @@
       "group": "build"
     },
     {
+      "label": "冒煙測試（M1）",
+      "type": "shell",
+      "command": "php tests/smoke_m1.php",
+      "problemMatcher": []
+    },
+    {
       "label": "Composer Install",
       "type": "shell",
       "command": "composer install",
@@ -20,7 +26,10 @@
       "type": "shell",
       "command": "vendor/bin/phpunit",
       "problemMatcher": [],
-      "group": { "kind": "test", "isDefault": true }
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
     },
     {
       "label": "Docker：啟動",

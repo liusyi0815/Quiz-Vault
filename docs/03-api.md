@@ -164,6 +164,8 @@
 
 `must_change_password` 為 `true` 時，前端應導向「修改密碼」頁面（見 [§3.13](#313-強制修改密碼使用者端)）。`GET /me` 的回應也包含此欄位。
 
+`POST /auth/logout` 回 `200`：`{ "data": { "logged_out": true } }`；註冊 `POST /auth/register` 回 `201`：`{ "data": { "user": { … } } }`（不會自動登入）。
+
 ### 3.2 新增題目（多選題）
 
 `POST /questions`
