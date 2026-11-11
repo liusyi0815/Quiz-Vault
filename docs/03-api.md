@@ -55,7 +55,7 @@
 
 | 方法 | 路徑 | 說明 | 權限 | 功能 |
 | --- | --- | --- | --- | --- |
-| GET | `/courses` | 課程列表（`?q=`、`?mine=1`） | 登入 | F-03 |
+| GET | `/courses` | 課程列表（`?q=` 依名稱搜尋、`?mine=1` 只看「我的」：學生＝我修的課、老師＝我開的課、管理員＝全部） | 登入 | F-03 |
 | POST | `/courses` | 開課 | T、A | F-03 |
 | GET | `/courses/{course_id}` | 課程詳情 | 登入 | F-03 |
 | PATCH | `/courses/{course_id}` | 修改課程 | T*、A | F-03 |
@@ -465,6 +465,102 @@ body 可選，帶入最後尚未暫存的答案（逾時後送來的答案會被
 - 「舊密碼」就是剛才的臨時密碼；舊密碼不對回 `400 WRONG_PASSWORD`。
 - 新密碼長度須 ≥ 8，且不得與舊密碼相同，否則回 `400 VALIDATION_FAILED`。
 
+### 3.14 課程
+
+`GET /courses?q=資料庫&per_page=20`
+
+```json
+{
+  "data": [
+    {
+      "course_id": 1, "name": "資料庫與網頁設計", "description": "MySQL 資料庫、PHP 後端與網頁安全實作",
+      "teacher": { "user_id": 2, "username": "陳建宏老師" },
+      "created_at": "2026-08-31T09:00:00+08:00",
+      "enrolled": false, "can_manage": false
+    }
+  ],
+  "meta": { "page": 1, "per_page": 20, "total": 1 }
+}
+```
+
+`enrolled` 只有學生可能是 `true`；`can_manage` 為 `true` 代表目前使用者是課程擁有者或管理員（前端據此顯示編輯按鈕）。
+
+`POST /courses`
+
+```json
+{ "name": "資料結構", "description": "陣列、堆疊、佇列與排序演算法" }
+```
+
+`201`：課程詳情。開課老師一律是目前登入者，只有管理員可額外帶 `teacher_id` 代指定。
+
+`GET /courses/{course_id}` 多了 `chapter_count`；課程擁有者與管理員另外看到 `student_count`、`question_count`、`exam_count`。
+
+`DELETE /courses/{course_id}` 回 `204`；底下還有章節或考卷回 `409 COURSE_NOT_EMPTY`，`details` 會列出各有幾個。
+
+### 3.15 修課與退選
+
+`POST /courses/1/enrollment`（學生，無 body）→ `201`
+
+```json
+{ "data": { "course_id": 1, "enrolled_at": "2026-11-10T15:42:31+08:00" } }
+```
+
+重複加入 `409 ALREADY_ENROLLED`；退選 `DELETE /courses/1/enrollment` 回 `204`，沒修的課回 `403 NOT_ENROLLED`。退選只刪除修課紀錄，不影響過往作答。
+
+`GET /courses/1/students?q=s001&per_page=20`（課程擁有者、管理員）
+
+```json
+{
+  "data": [ { "user_id": 5, "username": "王小明", "email": "s001@example.edu.tw", "enrolled_at": "2026-09-01T10:05:00+08:00" } ],
+  "meta": { "page": 1, "per_page": 20, "total": 1 }
+}
+```
+
+### 3.16 章節
+
+`GET /courses/1/chapters`：依 `sort_order` 排序，不分頁。老師與管理員多一個 `question_count`。
+
+```json
+{
+  "data": [ { "chapter_id": 1, "course_id": 1, "name": "SQL 基礎", "sort_order": 1, "question_count": 5 } ],
+  "meta": { "total": 1 }
+}
+```
+
+`POST /courses/1/chapters`：`{ "name": "第七章" }`，`sort_order` 不給就排在最後。
+
+`PUT /courses/1/chapters/order`：`{ "chapter_ids": [3, 1, 2] }`，必須剛好是這門課所有的章節，否則 `400`。
+
+`DELETE /chapters/{chapter_id}`：底下有題目（含已停用的）回 `409 CHAPTER_NOT_EMPTY`。
+
+### 3.17 題庫列表、整題取代、部分更新
+
+`GET /questions?course_id=1&type=multiple&tag=SQL&difficulty=2&is_active=1&q=DML&page=1`
+
+```json
+{
+  "data": [
+    {
+      "question_id": 3, "chapter": { "chapter_id": 1, "name": "SQL 基礎" }, "course_id": 1,
+      "type": "multiple", "content": "下列哪些屬於 DML（資料操作語言）指令？", "difficulty": 2, "is_active": true,
+      "tags": [ { "tag_id": 3, "name": "DML" }, { "tag_id": 1, "name": "SQL" } ],
+      "created_at": "2026-09-01T10:00:00+08:00"
+    }
+  ],
+  "meta": { "page": 1, "per_page": 20, "total": 1 }
+}
+```
+
+列表不含選項；老師只看得到自己課程的題目，管理員看全部。
+
+`GET /questions/{question_id}` 多了 `explanation`、`creator_id`、`in_use`，以及含 `is_correct` 的 `options`。
+
+`PUT /questions/{question_id}` 的 body 與新增相同（§3.2）：**整題取代**，沒給的選填欄位會回到預設值（`difficulty` 為 1、`explanation` 為 null、`tags` 為空）。題目不能搬到別門課程的章節（`400`）。`in_use` 為 `true` 時，題型、題幹、選項必須與現有的完全相同，否則 `409 QUESTION_IN_USE`。
+
+`PATCH /questions/{question_id}` 只能改 `chapter_id`、`difficulty`、`explanation`、`is_active`、`tags`；送出 `type`、`content`、`options` 會回 `400`。
+
+`DELETE /questions/{question_id}` 回 `204`，是軟刪除（`is_active = false`）；用 `PATCH` 送 `{ "is_active": true }` 可復原。
+
 ## 4. 錯誤碼
 
 ### 4.1 通用
@@ -538,5 +634,7 @@ body 可選，帶入最後尚未暫存的答案（逾時後送來的答案會被
 ### 4.7 狀態碼選擇原則
 
 - **400**：請求本身格式不對，改正後即可重送。
-- **401 / 403**：身份或權限問題；對「別人的資源」優先回 **404**，避免洩漏資源是否存在。
+- **401 / 403**：身份或權限問題。
+  - 大家都看得到的資源（課程本身、章節）：沒有修改權限回 **403**。
+  - 不公開的資源（修課名單、題庫、題目）：不是自己的一律回 **404**，避免洩漏資源是否存在；列表則只回自己的，別人的課程回空清單。
 - **409**：請求合法，但與資源目前狀態衝突（狀態機、唯一鍵、外鍵限制）。

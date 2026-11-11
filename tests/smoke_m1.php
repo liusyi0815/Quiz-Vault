@@ -17,67 +17,7 @@ $base = rtrim($argv[1] ?? 'http://localhost:8000/api/v1', '/');
 $adminEmail = getenv('ADMIN_EMAIL') ?: '';
 $adminPassword = getenv('ADMIN_PASSWORD') ?: '';
 
-final class Client
-{
-    private string $jar;
-
-    public function __construct(private string $base)
-    {
-        $this->jar = tempnam(sys_get_temp_dir(), 'smoke');
-    }
-
-    public function __destruct()
-    {
-        @unlink($this->jar);
-    }
-
-    /** @return array{0:int,1:array,2:string} [HTTP 狀態碼, 解析後的 JSON, 原始標頭] */
-    public function call(string $method, string $path, ?array $body = null, ?string $csrf = null): array
-    {
-        $headers = ['Accept: application/json'];
-        if ($body !== null) {
-            $headers[] = 'Content-Type: application/json';
-        }
-        if ($csrf !== null) {
-            $headers[] = 'X-CSRF-Token: ' . $csrf;
-        }
-        $ch = curl_init($this->base . $path);
-        curl_setopt_array($ch, [
-            CURLOPT_CUSTOMREQUEST  => $method,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HEADER         => true,
-            CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_COOKIEFILE     => $this->jar,
-            CURLOPT_COOKIEJAR      => $this->jar,
-            CURLOPT_TIMEOUT        => 15,
-        ]);
-        if ($body !== null) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body, JSON_UNESCAPED_UNICODE));
-        }
-        $raw = curl_exec($ch);
-        if ($raw === false) {
-            fwrite(STDERR, "連線失敗：" . curl_error($ch) . "\n請確認伺服器已啟動，且網址正確（目前：{$this->base}）\n");
-            exit(2);
-        }
-        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        $size = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        curl_close($ch);
-        return [$status, json_decode(substr($raw, $size), true) ?? [], substr($raw, 0, $size)];
-    }
-}
-
-$pass = 0;
-$fail = 0;
-function check(string $name, bool $ok, string $detail = ''): void
-{
-    global $pass, $fail;
-    $ok ? $pass++ : $fail++;
-    echo ($ok ? "  ✔ " : "  ✘ ") . $name . ($ok || $detail === '' ? '' : "   ← {$detail}") . "\n";
-}
-function code(array $res): string
-{
-    return $res[1]['error']['code'] ?? '';
-}
+require __DIR__ . '/support.php';
 
 $email = 'smoke+' . bin2hex(random_bytes(3)) . '@example.test';
 $pw1 = 'SmokeTest#1' . bin2hex(random_bytes(2));
@@ -197,6 +137,5 @@ if ($adminEmail !== '' && $adminPassword !== '') {
     echo "\n[F-22] 略過（要測管理員重設密碼，請設定 ADMIN_EMAIL 與 ADMIN_PASSWORD 環境變數）\n";
 }
 
-echo "\n結果：通過 {$pass} 項，失敗 {$fail} 項\n";
-echo "（測試帳號 {$email} 留在 users，可用 DELETE FROM users WHERE email LIKE 'smoke+%@example.test'; 清除）\n\n";
-exit($fail === 0 ? 0 : 1);
+echo "\n（測試帳號 {$email} 留在 users，可用 DELETE FROM users WHERE email LIKE 'smoke+%@example.test'; 清除）\n\n";
+exit(summary());

@@ -6,8 +6,12 @@ namespace App\Core;
 use App\Support\AppException;
 
 /**
- * 規則字串：required | email | trim | min:N | max:N | maxbytes:N
- * 例：['email' => 'required|email|trim|max:100']
+ * 規則以 | 分隔：
+ *   型別   string（預設）｜int｜bool｜array
+ *   修飾   required｜nullable（欄位有給 null 或空字串時，輸出 null）｜trim｜email
+ *   限制   min:N｜max:N（字串=字元數、整數=數值、陣列=元素數）｜maxbytes:N｜in:a,b,c
+ * 例：['email' => 'required|email|trim|max:100', 'difficulty' => 'int|min:1|max:3']
+ * 沒有給（或為空）且非 required 的欄位，不會出現在回傳結果裡。
  */
 final class Validator
 {
@@ -19,40 +23,89 @@ final class Validator
         foreach ($rules as $field => $ruleString) {
             $ruleList = explode('|', $ruleString);
             $required = in_array('required', $ruleList, true);
+            $nullable = in_array('nullable', $ruleList, true);
+            $trim     = in_array('trim', $ruleList, true);
+            $type = 'string';
+            foreach (['int', 'bool', 'array'] as $candidate) {
+                if (in_array($candidate, $ruleList, true)) {
+                    $type = $candidate;
+                }
+            }
+
+            $present = array_key_exists($field, $input);
             $value = $input[$field] ?? null;
+            if ($trim && is_string($value)) {
+                $value = trim($value);
+            }
 
             if ($value === null || $value === '') {
                 if ($required) {
                     $errors[] = ['field' => $field, 'reason' => '必填'];
+                } elseif ($nullable && $present) {
+                    $out[$field] = null;
                 }
                 continue;
             }
-            if (!is_string($value)) {
+
+            // ---- 型別檢查與轉換 ----
+            if ($type === 'int') {
+                if (is_string($value) && preg_match('/^-?\d+$/', $value) === 1) {
+                    $value = (int) $value;
+                }
+                if (!is_int($value)) {
+                    $errors[] = ['field' => $field, 'reason' => '必須是整數'];
+                    continue;
+                }
+            } elseif ($type === 'bool') {
+                if (!is_bool($value)) {
+                    if (in_array($value, [1, '1', 'true'], true)) {
+                        $value = true;
+                    } elseif (in_array($value, [0, '0', 'false'], true)) {
+                        $value = false;
+                    } else {
+                        $errors[] = ['field' => $field, 'reason' => '必須是 true 或 false'];
+                        continue;
+                    }
+                }
+            } elseif ($type === 'array') {
+                if (!is_array($value)) {
+                    $errors[] = ['field' => $field, 'reason' => '必須是陣列'];
+                    continue;
+                }
+            } elseif (!is_string($value)) {
                 $errors[] = ['field' => $field, 'reason' => '必須是文字'];
                 continue;
             }
-            if (in_array('trim', $ruleList, true)) {
-                $value = trim($value);
-            }
 
+            // ---- 限制條件（遇到第一個不符就停止，一個欄位只回報一個原因）----
             foreach ($ruleList as $rule) {
                 [$name, $arg] = array_pad(explode(':', $rule, 2), 2, null);
-                $len = mb_strlen($value);
+                $size = is_int($value) ? $value : (is_array($value) ? count($value) : mb_strlen((string) $value));
+                $reason = null;
+
                 if ($name === 'email' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
-                    $errors[] = ['field' => $field, 'reason' => '格式不正確'];
-                    break;
+                    $reason = '格式不正確';
+                } elseif ($name === 'min' && $size < (int) $arg) {
+                    $reason = match (true) {
+                        is_int($value)   => "不可小於 {$arg}",
+                        is_array($value) => "至少要有 {$arg} 個項目",
+                        default          => "長度至少 {$arg} 個字元",
+                    };
+                } elseif ($name === 'max' && $size > (int) $arg) {
+                    $reason = match (true) {
+                        is_int($value)   => "不可大於 {$arg}",
+                        is_array($value) => "最多只能有 {$arg} 個項目",
+                        default          => "長度不可超過 {$arg} 個字元",
+                    };
+                } elseif ($name === 'maxbytes' && strlen((string) $value) > (int) $arg) {
+                    $reason = "長度不可超過 {$arg} 位元組";
+                } elseif ($name === 'in' && !in_array($value, explode(',', (string) $arg), true)) {
+                    $reason = '必須是其中之一：' . str_replace(',', '、', (string) $arg);
                 }
-                if ($name === 'min' && $len < (int) $arg) {
-                    $errors[] = ['field' => $field, 'reason' => "長度至少 {$arg} 個字元"];
-                    break;
-                }
-                if ($name === 'max' && $len > (int) $arg) {
-                    $errors[] = ['field' => $field, 'reason' => "長度不可超過 {$arg} 個字元"];
-                    break;
-                }
-                if ($name === 'maxbytes' && strlen($value) > (int) $arg) {
-                    $errors[] = ['field' => $field, 'reason' => "長度不可超過 {$arg} 位元組"];
-                    break;
+
+                if ($reason !== null) {
+                    $errors[] = ['field' => $field, 'reason' => $reason];
+                    continue 2;
                 }
             }
             $out[$field] = $value;

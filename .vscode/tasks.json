@@ -16,6 +16,12 @@
       "problemMatcher": []
     },
     {
+      "label": "冒煙測試（M2）",
+      "type": "shell",
+      "command": "php tests/smoke_m2.php",
+      "problemMatcher": []
+    },
+    {
       "label": "Composer Install",
       "type": "shell",
       "command": "composer install",

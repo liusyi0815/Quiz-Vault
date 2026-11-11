@@ -83,7 +83,8 @@
 **規則摘要**
 - 老師只能修改、刪除**自己的**課程；管理員不受限。
 - 只有**完全空白**的課程（沒有章節、考卷）才能刪除，否則回 `COURSE_NOT_EMPTY`。
-- 建立課程時 `teacher_id` 一律取自 session，不接受前端指定（管理員可代指定）。
+- 建立課程時 `teacher_id` 一律取自 session，不接受前端指定（管理員可代指定，且必須是啟用中的老師帳號）。
+- 課程列表 `?mine=1`：學生＝我修的課、老師＝我開的課、管理員＝全部；`can_manage` 告訴前端要不要顯示編輯按鈕。
 
 **端點**：`GET /courses`、`POST /courses`、`GET /courses/{course_id}`、`PATCH /courses/{course_id}`、`DELETE /courses/{course_id}`
 
@@ -126,6 +127,7 @@
 - 題型與選項需相符：單選恰 1 個正確、是非恰 2 個選項、多選至少 2 個選項且至少 1 個正確、簡答不得有選項。
 - 題目、選項、標籤在**同一個 transaction** 寫入。
 - 題目已被作答或已被發佈的考卷使用後，**不得修改題型、題幹與選項**（`QUESTION_IN_USE`）；仍可改解析、難度、標籤與停用。
+- 題目不能搬到別門課程的章節；`PATCH` 只能改解析、難度、章節、標籤與啟用狀態，要改題幹或選項請用 `PUT` 整題取代。
 - 刪除一律是軟刪除（`is_active = 0`）。
 
 **端點**：`GET /questions`、`POST /questions`、`GET /questions/{question_id}`、`PUT /questions/{question_id}`、`PATCH /questions/{question_id}`、`DELETE /questions/{question_id}`

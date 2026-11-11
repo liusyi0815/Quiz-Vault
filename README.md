@@ -4,7 +4,7 @@
 
 **技術**：PHP 8.2 + MySQL 8.0 + HTML / CSS / JavaScript（REST API，前後端分離）
 
-> 目前階段：**規劃書 + 資料庫 + 後端 M0～M1**。資料庫（`database/`）與後端的基礎骨架、註冊／登入／登出／改密碼、管理員重設密碼（F-22）已完成並實測；課程、題庫、考卷、作答（M2 之後）與前端頁面尚未開始。規劃文件放在 [`docs/`](docs/)。
+> 目前階段：**規劃書 + 資料庫 + 後端 M0～M2**。資料庫（`database/`）、後端骨架、帳號（F-01、F-02、F-22）、課程／修課／章節／題庫（F-03～F-06）已完成並實測；考卷、作答批改（M3 之後）與前端頁面尚未開始。規劃文件放在 [`docs/`](docs/)。
 
 ## 規劃書
 
@@ -75,6 +75,14 @@ quiz-system/
    ```
 
    測試登入、改密碼要用到管理員帳號，可再加上 `ADMIN_EMAIL` 與 `ADMIN_PASSWORD` 環境變數（密碼在 `credentials-private.csv`）。
+
+   M2（課程、修課、章節、題庫）的測試：
+
+   ```bat
+   php tests\smoke_m2.php
+   ```
+
+   它會用 `teacher1`、`teacher2`（以及選用的管理員）的帳號跑 130 多項檢查，密碼從 `TEACHER1_PASSWORD`、`TEACHER2_PASSWORD`、`ADMIN_PASSWORD` 環境變數，或專案根目錄（或上一層）的 `credentials-private.csv` 讀取。測試資料都以 `[smoke]` 開頭，結束時會自動清除。
 8. 也可以用 `tests/api/01-auth-and-exam.http`（VS Code 的 REST Client）手動送請求。
 
 **改用 XAMPP 的 Apache（不用 `php -S`）：** 把專案放在 `C:\xampp\htdocs\quiz-system`，網址改成 <http://localhost/quiz-system/public/api/v1/health>。`public/api/.htaccess` 需要 Apache 的 `mod_rewrite`（XAMPP 預設已開）。
@@ -89,6 +97,16 @@ quiz-system/
 | GET / PATCH | `/me` | 目前使用者、修改姓名／email |
 | PUT | `/me/password` | 修改密碼 |
 | POST | `/admin/users/{user_id}/reset-password` | 管理員重設密碼（F-22） |
+| GET / POST | `/courses` | 課程列表、開課（F-03） |
+| GET / PATCH / DELETE | `/courses/{course_id}` | 課程詳情、修改、刪除空課程 |
+| POST / DELETE | `/courses/{course_id}/enrollment` | 加入課程、退選（F-04） |
+| GET | `/courses/{course_id}/students` | 修課名單（課程擁有者、管理員） |
+| DELETE | `/courses/{course_id}/students/{user_id}` | 移除學生 |
+| GET / POST | `/courses/{course_id}/chapters` | 章節列表、新增章節（F-05） |
+| PUT | `/courses/{course_id}/chapters/order` | 調整章節順序 |
+| PATCH / DELETE | `/chapters/{chapter_id}` | 修改、刪除章節 |
+| GET / POST | `/questions` | 題目列表（可篩選）、新增題目含選項與標籤（F-06） |
+| GET / PUT / PATCH / DELETE | `/questions/{question_id}` | 詳情、整題取代、部分更新、軟刪除 |
 
 > `public/router.php` 只供 `php -S` 開發用；Apache / XAMPP 環境走 `public/api/.htaccess`。
 
