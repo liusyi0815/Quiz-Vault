@@ -14,17 +14,17 @@ export function flyToPlanet(camera, targetMesh, onComplete) {
     }
 
     const targetPosition = targetMesh.position;
-
+    
+    // 計算停在星球前方的安全位置
     const endPosition = {
         x: targetPosition.x,
-        y: targetPosition.y + 10,
-        z: targetPosition.z + 15
+        y: targetPosition.y + 7,
+        z: targetPosition.z + 9.5
     };
-    //拉近鏡頭調整
 
     const endLookAt = {
         x: targetPosition.x,
-        y: targetPosition.y,
+        y: targetPosition.y+8,
         z: targetPosition.z
     };
 

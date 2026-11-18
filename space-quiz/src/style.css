@@ -503,3 +503,106 @@ canvas {
     align-items: center;
     gap: 8px;
 }
+
+/* 測驗面板遮罩 */
+.quiz-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 300;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+.quiz-modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+.quiz-box {
+    background: #1a1a2e;
+    border: 2px solid #89d8ff;
+    padding: 30px;
+    border-radius: 16px;
+    width: 450px;
+    color: #ffffff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    text-align: left;
+}
+.quiz-box h3 {
+    color: #89d8ff;
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 22px;
+}
+.question-title {
+    font-size: 18px;
+    margin-bottom: 20px;
+    color: #fff;
+}
+.option-label {
+    display: block;
+    background: #16213e;
+    border: 1px solid #0f3460;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.option-label:hover {
+    background: #1f305e;
+    border-color: #89d8ff;
+}
+.option-label input {
+    margin-right: 10px;
+}
+
+/* 成績與解析面板樣式 */
+.result-box {
+    background: #1a1a2e;
+    border: 2px solid #89d8ff;
+    padding: 30px;
+    border-radius: 16px;
+    width: 500px;
+    color: #ffffff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    text-align: left;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.result-box h3 {
+    color: #89d8ff;
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 22px;
+}
+.result-stat-card {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+}
+.result-stat-item span {
+    display: block;
+    font-size: 20px;
+    font-weight: bold;
+    color: #ffe84a;
+    margin-top: 5px;
+}
+.wrong-question-item {
+    background: rgba(233, 69, 96, 0.1);
+    border: 1px solid rgba(233, 69, 96, 0.4);
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}

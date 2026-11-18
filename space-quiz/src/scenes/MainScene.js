@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import gsap from "gsap";
 import { Planet } from "../objects/Planet";
 import { Character } from "../objects/Character";
 import { slidePlanets } from "../animations/PlanetSlide";
@@ -30,6 +31,9 @@ export class MainScene {
 
         this.bindEvents();
         this.createBackBtnDOM();
+        this.createQuizModalDOM();
+        this.createExamSelectModalDOM();
+        this.createResultModalDOM();
     }
 
     createBackBtnDOM() {
@@ -155,23 +159,29 @@ export class MainScene {
         // 在星球上方生成旗幟、書本、鉛筆
         this.examGroup = new THREE.Group();
 
+        // 1. 旗幟擺在中間偏右
         const flag = createFlag(planet.name);
-        flag.position.set(-1.5, 3.2, 0);
+        flag.position.set(0.2, 2, -0.5);
         this.examGroup.add(flag);
 
+        // 2. 書本擺在左側，呈現「成績與解答」
         const book = createBook();
-        book.position.set(-2.2, 3.0, 1.2);
+        book.position.set(-1.8, 3, 0.8);
         this.examGroup.add(book);
 
+        // 3. 鉛筆擺在右側，筆尖剛好插入星球表面
         const pencil = createPencil();
-        pencil.position.set(1.8, 3.2, 0.5);
+        pencil.position.set(1.6, 4, 0.5);
         this.examGroup.add(pencil);
+
+        planet.mesh.add(this.examGroup);
 
         // 將考試物件掛載到該星球的 mesh 上，跟隨星球同步旋轉
         planet.mesh.add(this.examGroup);
 
         // 執行鏡頭飛入動畫
         flyToPlanet(this.camera, planet.mesh, () => {
+            this.isAnimating = false; // <--- 【修改】等飛入動畫完全結束後，才解除鎖定
             console.log(`已成功進入【${planet.name}】考試場景！`);
         });
     }
@@ -192,16 +202,18 @@ export class MainScene {
         document.getElementById('backGalaxyBtn').classList.remove('active');
         document.getElementById('subjectHUD').style.display = 'block';
 
-        // 3. 取得目前中心星球的位置，讓相機順暢退回該星球前方的總覽視角
+        // 3. 取得目前中心星球的位置作為視線焦點，讓相機退回正上方偏遠的完美總覽視角
         const currentPlanet = this.planets[this.currentIndex];
         const targetPos = currentPlanet.mesh.position;
 
+        // 讓相機回到以「該星球 X 軸為中心，上方高度 8、深度 25」的位置
         const returnPosition = {
             x: targetPos.x,
-            y: targetPos.y + 8,     // 保持上方俯視的高度
-            z: targetPos.z + 25     // 保持適當的拉遠距離
+            y: targetPos.y + 10,   // 保持在星球上方高度 8
+            z: targetPos.z + 40   // 拉遠距離
         };
-
+        
+        // 讓相機的視線焦點精準看著該星球中心
         const returnLookAt = {
             x: targetPos.x,
             y: targetPos.y,
@@ -215,9 +227,13 @@ export class MainScene {
             duration: 1.5,
             ease: "power2.inOut",
             onUpdate: () => {
+                // 動態更新視線，確保飛行過程中鏡頭都是盯著星球中心
                 this.camera.lookAt(returnLookAt.x, returnLookAt.y, returnLookAt.z);
             },
             onComplete: () => {
+                // 動畫結束後強制精準對齊，解除鎖定
+                this.camera.position.set(returnPosition.x, returnPosition.y, returnPosition.z);
+                this.camera.lookAt(returnLookAt.x, returnLookAt.y, returnLookAt.z);
                 this.isAnimating = false;
                 this.isExamMode = false;
                 console.log("已成功返回宇宙總覽");
@@ -250,6 +266,45 @@ export class MainScene {
         document.getElementById('hudScore').innerText = details.avgScore;
     }
 
+    // 在 MainScene 類別中新增這個方法，用來動態產生新星球
+    addNewPlanet(courseName) {
+        // 1. 隨機挑選 planet1 ~ planet4 紋理
+        const textures = [
+            "/planet1.jpg",
+            "/planet2.jpg",
+            "/planet3.jpg",
+            "/planet4.jpg"
+        ];
+        const randomTexture = textures[Math.floor(Math.random() * textures.length)];
+        
+        // 2. 建立新 Planet 物件（顏色先給預設白色，靠紋理貼圖呈現）
+        const newIndex = this.planets.length;
+        const newPlanet = new Planet(courseName, 0xffffff, newIndex * 12, 3, randomTexture);
+        
+        // 3. 設定預設詳細資料
+        newPlanet.mesh.userData.details = {
+            level: "Lv. 1",
+            exams: 1,
+            avgScore: 0
+        };
+        
+        // 4. 推入 planets 陣列並加入 scene
+        this.scene.add(newPlanet.mesh);
+        this.planets.push(newPlanet);
+        
+        // 5. 將畫面切換至剛新增好的這顆新星球
+        this.currentIndex = this.planets.length - 1;
+        slidePlanets(this.planets, this.currentIndex);
+        this.updateHUD();
+        
+        setTimeout(() => {
+            this.updateCharacter();
+        }, 1000);
+
+        console.log(`成功新增課程星球：${courseName}`);
+    }
+
+    // --- 建立課程加入 Modal 與其互動邏輯 ---
     createJoinModalDOM() {
         const modalHTML = `
             <div id="joinModal" class="modal-overlay">
@@ -266,49 +321,88 @@ export class MainScene {
         `;
         document.body.insertAdjacentHTML('beforeend', modalHTML);
 
+        // 綁定關閉按鈕事件
         document.getElementById('closeModalBtn').addEventListener('click', () => {
             document.getElementById('joinModal').classList.remove('active');
         });
 
+        // 綁定確認送出事件（此處對接功能一：新增課程產生星球）
         document.getElementById('submitJoinBtn').addEventListener('click', () => {
-            const code = document.getElementById('courseCodeInput').value;
+            const code = document.getElementById('courseCodeInput').value.trim();
             if (!code) {
                 alert('請輸入課程代碼！');
                 return;
             }
-            alert(`成功送出加入課程代碼：${code}`);
+            
+            // 呼叫我們剛剛要實作的新增星球函式
+            this.addNewPlanet(code);
+            
+            // 清空輸入框並關閉 Modal
+            document.getElementById('courseCodeInput').value = '';
             document.getElementById('joinModal').classList.remove('active');
         });
     }
 
     createStudentInfoModalDOM() {
+        // 1. 從 localStorage 讀取已儲存的姓名與學號（若沒有則給預設值）
+        const savedName = localStorage.getItem("studentName") || "王小明";
+        const savedId = localStorage.getItem("studentId") || "A11111111";
+
         const infoModalHTML = `
             <div id="studentInfoModal" class="modal-overlay">
                 <div class="modal-box">
                     <h3>學生個人檔案</h3>
                     <div class="student-info-content">
-                        <p>姓名：<span>王小明</span></p>
-                        <p>學號：<span>A11111111</span></p>
-                        <p>身份：<span>Student (學生)</span></p>
-                        <p>已修課程：<span>數學、國文、英文、自然</span></p>
+                        <div style="margin-bottom: 12px; text-align: left;">
+                            <label style="font-size: 14px; color: #89d8ff; display: block; margin-bottom: 4px;">姓名：</label>
+                            <input type="text" id="editStudentName" value="${savedName}" style="width: 100%; padding: 8px; background: #16213e; border: 1px solid #0f3460; color: #fff; border-radius: 6px; box-sizing: border-box;" />
+                        </div>
+                        <div style="margin-bottom: 12px; text-align: left;">
+                            <label style="font-size: 14px; color: #89d8ff; display: block; margin-bottom: 4px;">學號：</label>
+                            <input type="text" id="editStudentId" value="${savedId}" style="width: 100%; padding: 8px; background: #16213e; border: 1px solid #0f3460; color: #fff; border-radius: 6px; box-sizing: border-box;" />
+                        </div>
+                        <p style="margin: 8px 0; font-size: 14px; color: #e0e0e0;">身份：<span>Student (學生)</span></p>
+                        <p style="margin: 8px 0; font-size: 14px; color: #e0e0e0;">已修課程：<span>數學、國文、英文、自然</span></p>
                     </div>
-                    <div class="modal-actions">
-                        <button class="btn-confirm" id="closeInfoBtn" style="width: 100%;">關閉視窗</button>
+                    <div class="modal-actions" style="display: flex; gap: 10px;">
+                        <button class="btn-cancel" id="closeInfoBtn" style="flex: 1;">關閉視窗</button>
+                        <button class="btn-confirm" id="saveInfoBtn" style="flex: 1;">儲存資料</button>
                     </div>
                 </div>
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', infoModalHTML);
 
+        // 關閉視窗按鈕
         document.getElementById('closeInfoBtn').addEventListener('click', () => {
+            document.getElementById('studentInfoModal').classList.remove('active');
+        });
+
+        // 儲存資料按鈕（對接 localStorage）
+        document.getElementById('saveInfoBtn').addEventListener('click', () => {
+            const newName = document.getElementById('editStudentName').value.trim();
+            const newId = document.getElementById('editStudentId').value.trim();
+
+            if (!newName || !newId) {
+                alert('姓名與學號不得為空！');
+                return;
+            }
+
+            // 使用 localStorage 儲存
+            localStorage.setItem("studentName", newName);
+            localStorage.setItem("studentId", newId);
+
+            alert('個人資料儲存成功！');
             document.getElementById('studentInfoModal').classList.remove('active');
         });
     }
 
     bindEvents() {
         window.addEventListener("mousemove", (event) => {
-            if (event.target.closest('.modal-overlay.active')) return;
-
+            // 如果有任何 Modal 正在開啟中，直接中斷，不進行 3D 浮動發光檢測
+            if (document.querySelector('.modal-overlay.active') || document.querySelector('.quiz-modal-overlay.active')) return;
+            if (event.target.closest('.modal-overlay.active') || event.target.closest('.quiz-modal-overlay.active')) return;
+            
             this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
             this.raycaster.setFromCamera(this.mouse, this.camera);
@@ -339,17 +433,20 @@ export class MainScene {
                         else break;
                     }
                     if (rootMesh.material && rootMesh.material.emissive) {
-                        rootMesh.material.emissive.setHex(0x00aaff);
-                        rootMesh.material.emissiveIntensity = 0.8;
+                        rootMesh.material.emissive.setHex(0xffaa00);// 更改這裡的HEX色碼 (例如 0xffaa00 改成金黃色)
+                        rootMesh.material.emissiveIntensity = 0.5;
                     }
                 }
             }
         });
 
         window.addEventListener("click", (event) => {
-            // 如果正在播放動畫或點擊到 Modal，直接返回
+            // 1. 如果正在播放動畫，直接返回
             if (this.isAnimating) return;
-            if (event.target.closest('.modal-box')) return;
+
+            // 2. 如果點擊的是任何 Modal 內部容器或當前已有 Modal 啟用中，直接返回，避免穿透點擊到 3D 物件
+            if (event.target.closest('.modal-box') || event.target.closest('.quiz-box')) return;
+            if (document.querySelector('.modal-overlay.active') || document.querySelector('.quiz-modal-overlay.active')) return;
 
             this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -359,13 +456,21 @@ export class MainScene {
             objects.push(this.character.mesh);
             objects.push(this.joinPlanet.mesh);
 
+            // 如果在考試模式下，把考試場景中的物件（鉛筆、書本等）加入點擊判定
+            if (this.isExamMode && this.examGroup) {
+                this.examGroup.traverse(child => {
+                    if (child.isMesh) objects.push(child);
+                });
+            }
+
             const intersects = this.raycaster.intersectObjects(objects, true);
             if (intersects.length === 0) return;
 
             const clicked = intersects[0].object;
 
+            // 檢查點擊到什麼
             if (clicked === this.joinPlanet.mesh || clicked.parent === this.joinPlanet.mesh) {
-                this.showJoinModal();
+                document.getElementById('joinModal').classList.add('active');
                 return;
             }
 
@@ -374,16 +479,38 @@ export class MainScene {
                 return;
             }
 
+            // 檢查是否點擊到考試鉛筆
+            if (clicked.userData.type === "exam_pencil" || clicked.parent?.userData.type === "exam_pencil") {
+                if (this.currentExamPlanet) {
+                    this.openExamList(this.currentExamPlanet.name);
+                }
+                return;
+            }
+
+            // 檢查是否點擊到成績書本
+            if (clicked.userData.type === "exam_book" || clicked.parent?.userData.type === "exam_book") {
+                if (this.currentExamPlanet) {
+                    this.openResultPage(this.currentExamPlanet.name);
+                }
+                return;
+            }
+
             if (clicked.userData.type === "planet") {
                 if (this.isAnimating || this.isExamMode) return;
-                this.isAnimating = true;
 
-                // 找到對應的 Planet 物件
-                const targetPlanet = this.planets.find(p => p.mesh === clicked || p.mesh.getObjectById(clicked.id));
-                if (targetPlanet) {
-                    this.enterExamScene(targetPlanet);
+                const targetIndex = this.planets.findIndex(p => p.mesh === clicked || p.mesh.getObjectById(clicked.id));
+                
+                if (targetIndex !== -1) {
+                    if (targetIndex !== this.currentIndex) {
+                        console.log("只能進入正前方當前選中的星球考試！");
+                        return;
+                    }
+                    this.isAnimating = true;
+                    const targetPlanet = this.planets[targetIndex];
+                    if (targetPlanet) {
+                        this.enterExamScene(targetPlanet);
+                    }
                 }
-                this.isAnimating = false;
             }
         });
     }
@@ -423,5 +550,283 @@ export class MainScene {
             this.joinPlanet.mesh.rotation.y += 0.005;
         this.updateCharacter();
         }
+    }
+
+    createQuizModalDOM() {
+        const quizModalHTML = `
+            <div id="quizModal" class="quiz-modal-overlay">
+                <div class="quiz-box">
+                    <h3 id="quizSubjectTitle">科目測驗</h3>
+                    <div id="quizContainer">
+                        <!-- 動態填入題目與選項 -->
+                    </div>
+                    <div class="modal-actions" style="margin-top: 20px;">
+                        <button class="btn-cancel" id="closeQuizBtn">放棄測驗</button>
+                        <button class="btn-confirm" id="nextQuizBtn">下一題</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', quizModalHTML);
+
+        // 放棄測驗按鈕
+        document.getElementById('closeQuizBtn').addEventListener('click', () => {
+            document.getElementById('quizModal').classList.remove('active');
+        });
+
+        // 下一題 / 提交按鈕事件
+        document.getElementById('nextQuizBtn').addEventListener('click', () => {
+            this.handleNextQuestion();
+        });
+    }
+
+    // 開始測驗
+    startQuiz(subjectName) {
+        this.currentSubject = subjectName;
+        this.currentQuestionIndex = 0;
+        this.userAnswers = [];
+
+        // 模擬題庫資料
+        this.questions = [
+            {
+                title: "1 + 1 = ?",
+                options: ["1", "2", "3", "4"],
+                answer: 1 //對應選項索引 (0型陣列，這裡是 '2')
+            },
+            {
+                title: "2 + 2 = ?",
+                options: ["1", "3", "4", "5"],
+                answer: 2 //對應選項索引 ('4')
+            }
+        ];
+
+        document.getElementById('quizSubjectTitle').innerText = `【${subjectName}】線上測驗`;
+        document.getElementById('quizModal').classList.add('active');
+        this.renderQuestion();
+    }
+
+    // 渲染當前題目
+    renderQuestion() {
+        const container = document.getElementById('quizContainer');
+        const q = this.questions[this.currentQuestionIndex];
+        
+        let optionsHtml = '';
+        q.options.forEach((opt, idx) => {
+            optionsHtml += `
+                <label class="option-label">
+                    <input type="radio" name="quizOption" value="${idx}" />
+                    ${opt}
+                </label>
+            `;
+        });
+
+        container.innerHTML = `
+            <p style="color: #ffe84a; font-size: 14px; margin-bottom: 8px;">第 ${this.currentQuestionIndex + 1} 題 / 共 ${this.questions.length} 題</p>
+            <div class="question-title">${q.title}</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${optionsHtml}
+            </div>
+        `;
+
+        // 如果是最後一題，按鈕文字改為「提交答案」
+        const btn = document.getElementById('nextQuizBtn');
+        if (this.currentQuestionIndex === this.questions.length - 1) {
+            btn.innerText = "提交答案";
+        } else {
+            btn.innerText = "下一題";
+        }
+    }
+
+    // 處理下一題或計算成績
+    handleNextQuestion() {
+        const selected = document.querySelector('input[name="quizOption"]:checked');
+        if (!selected) {
+            alert('請先選擇一個答案！');
+            return;
+        }
+
+        // 記錄答案
+        this.userAnswers.push(parseInt(selected.value));
+
+        this.currentQuestionIndex++;
+        if (this.currentQuestionIndex < this.questions.length) {
+            this.renderQuestion();
+        } else {
+            // 計算成績
+            this.calculateExamScore();
+        }
+    }
+
+    // 計算成績並儲存
+    calculateExamScore() {
+        let correctCount = 0;
+        this.questions.forEach((q, idx) => {
+            if (this.userAnswers[idx] === q.answer) {
+                correctCount++;
+            }
+        });
+
+        const score = Math.round((correctCount / this.questions.length) * 100);
+        const wrongCount = this.questions.length - correctCount;
+
+        alert(`測驗結束！您的成績是：${score} 分 (答對 ${correctCount} 題，答錯 ${wrongCount} 題)`);
+
+        // 關閉測驗面板
+        document.getElementById('quizModal').classList.remove('active');
+
+        // 將成績暫存或更新至目前星球的資料中
+        if (this.currentExamPlanet) {
+            this.currentExamPlanet.mesh.userData.details.avgScore = score;
+            this.currentExamPlanet.mesh.userData.details.exams += 1;
+            this.updateHUD(); // 更新畫面上方 HUD
+        }
+    }
+
+    // 1. 建立「選擇考試場次」的 Modal DOM
+    createExamSelectModalDOM() {
+        const selectModalHTML = `
+            <div id="examSelectModal" class="quiz-modal-overlay">
+                <div class="quiz-box" style="width: 480px;">
+                    <h3 id="examSelectTitle">選擇考試場次</h3>
+                    <p style="font-size: 14px; color: #aaa; margin-bottom: 15px;">請選擇您要進行的測驗項目：</p>
+                    <div id="examListContainer" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;">
+                        <!-- 動態產生考試場次清單 -->
+                    </div>
+                    <div class="modal-actions" style="margin-top: 20px;">
+                        <button class="btn-cancel" id="closeExamSelectBtn" style="width: 100%;">返回星球表面</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', selectModalHTML);
+
+        // 關閉場次選擇視窗
+        document.getElementById('closeExamSelectBtn').addEventListener('click', () => {
+            document.getElementById('examSelectModal').classList.remove('active');
+        });
+    }
+
+    // 2. 開啟某科目的考試場次列表
+    openExamList(subjectName) {
+        document.getElementById('examSelectTitle').innerText = `【${subjectName}】可考測驗列表`;
+        const container = document.getElementById('examListContainer');
+
+        // 模擬該科目的多場考試（未來可替換為後端 API 資料）
+        const availableExams = [
+            { id: 101, title: `${subjectName} - 第一次隨堂小考`, time: "10 分鐘", questionsCount: 2, status: "可作答" },
+            { id: 102, title: `${subjectName} - 期中模擬測驗`, time: "30 分鐘", questionsCount: 2, status: "可作答" },
+            { id: 103, title: `${subjectName} - 期末總複習卷`, time: "45 分鐘", questionsCount: 2, status: "可作答" }
+        ];
+
+        container.innerHTML = '';
+        availableExams.forEach(exam => {
+            const itemHTML = `
+                <div class="exam-item-card" data-exam-id="${exam.id}" data-exam-title="${exam.title}" style="
+                    background: #16213e;
+                    border: 1px solid #0f3460;
+                    padding: 15px;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    transition: all 0.2s;
+                ">
+                    <div>
+                        <div style="font-weight: bold; color: #fff; font-size: 16px; margin-bottom: 4px;">${exam.title}</div>
+                        <div style="font-size: 13px; color: #89d8ff;">題數：${exam.questionsCount} 題 ｜ 限時：${exam.time}</div>
+                    </div>
+                    <span style="
+                        background: #e94560;
+                        color: white;
+                        padding: 6px 12px;
+                        border-radius: 6px;
+                        font-size: 13px;
+                        font-weight: bold;
+                    ">開始作答 ➔</span>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', itemHTML);
+        });
+
+        // 綁定每一張考試卡片的點擊事件
+        container.querySelectorAll('.exam-item-card').forEach(card => {
+            // 滑鼠懸停發光效果
+            card.addEventListener('mouseenter', () => card.style.borderColor = '#89d8ff');
+            card.addEventListener('mouseleave', () => card.style.borderColor = '#0f3460');
+
+            // 點擊場次後，關閉場次列表，正式進入該場考試的作答頁面
+            card.addEventListener('click', () => {
+                const examTitle = card.getAttribute('data-exam-title');
+                document.getElementById('examSelectModal').classList.remove('active');
+                this.startQuiz(examTitle); // 進入原本做好的作答頁面
+            });
+        });
+
+        document.getElementById('examSelectModal').classList.add('active');
+    }
+
+    // 1. 建立成績與解析 Modal DOM
+    createResultModalDOM() {
+        const resultModalHTML = `
+            <div id="resultModal" class="quiz-modal-overlay">
+                <div class="result-box">
+                    <h3 id="resultModalTitle">學習成績與錯題解析</h3>
+                    <div id="resultContentContainer">
+                        <!-- 動態填入成績與錯題資訊 -->
+                    </div>
+                    <div class="modal-actions" style="margin-top: 20px;">
+                        <button class="btn-confirm" id="closeResultBtn" style="width: 100%;">關閉視窗</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', resultModalHTML);
+
+        document.getElementById('closeResultBtn').addEventListener('click', () => {
+            document.getElementById('resultModal').classList.remove('active');
+        });
+    }
+
+    // 2. 開啟成績與解析頁面
+    openResultPage(subjectName) {
+        document.getElementById('resultModalTitle').innerText = `【${subjectName}】成績與錯題解析`;
+        const container = document.getElementById('resultContentContainer');
+
+        // 讀取該星球目前的平均分數（若剛考完會同步更新）
+        const currentDetails = this.currentExamPlanet?.mesh.userData.details || { avgScore: 0, exams: 0 };
+        const score = currentDetails.avgScore;
+        const correctCount = score > 0 ? Math.round((score / 100) * 2) : 0;
+        const wrongCount = 2 - correctCount;
+
+        container.innerHTML = `
+            <div class="result-stat-card">
+                <div class="result-stat-item">
+                    <p style="font-size: 14px; color: #aaa;">最新成績</p>
+                    <span>${score} 分</span>
+                </div>
+                <div class="result-stat-item">
+                    <p style="font-size: 14px; color: #aaa;">答對題數</p>
+                    <span style="color: #63ff7f;">${correctCount} 題</span>
+                </div>
+                <div class="result-stat-item">
+                    <p style="font-size: 14px; color: #aaa;">答錯題數</p>
+                    <span style="color: #e94560;">${wrongCount} 題</span>
+                </div>
+            </div>
+
+            <h4 style="color: #89d8ff; margin-bottom: 10px; font-size: 16px;">📖 錯題解析記錄：</h4>
+            <div id="wrongQuestionsList">
+                ${wrongCount > 0 ? `
+                    <div class="wrong-question-item">
+                        <div style="font-weight: bold; color: #fff; margin-bottom: 4px;">Q: 1 + 1 = ?</div>
+                        <div style="font-size: 13px; color: #ff9999;">你的答案：1 ｜ 正確答案：2</div>
+                        <div style="font-size: 12px; color: #ccc; margin-top: 4px;">解析：基本加法運算，1加1等於2。</div>
+                    </div>
+                ` : `<p style="color: #63ff7f; text-align: center; padding: 20px;">太棒了！目前沒有錯題紀錄，保持得非常好！</p>`}
+            </div>
+        `;
+
+        document.getElementById('resultModal').classList.add('active');
     }
 }

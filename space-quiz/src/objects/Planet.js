@@ -20,7 +20,7 @@ export class Planet {
             });
         } else {
             material = new THREE.MeshStandardMaterial({ 
-                map: texture,
+                color: color,
                 roughness: 0.7,
                 metalness: 0.1,
                 emissive: 0x000000,
