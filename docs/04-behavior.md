@@ -191,8 +191,8 @@ COMMIT
 
 ### 5.2 隨機抽題
 
-1. 候選集合：`is_active = 1`、章節在指定範圍、（若有）帶有指定標籤、**不在本考卷中**。
-2. 依 `by_difficulty` 對每個難度分別抽取：
+1. 候選集合：`is_active = 1`、章節在指定範圍（不給＝整門課）、（若有）帶有**任何一個**指定標籤、**不在本考卷中**。
+2. 依 `by_difficulty`（各難度題數）對每個難度分別抽取；若改給 `count`，則不分難度、一次抽出總題數（兩者必須擇一）：
 
    ```sql
    SELECT question_id FROM questions
@@ -200,20 +200,25 @@ COMMIT
    ORDER BY RAND() LIMIT ?;
    ```
 
+   整個流程在 transaction 內、並先鎖住考卷那一列（`SELECT ... FOR UPDATE`），所以兩個人同時抽題會一個接一個執行。
+
 3. 任一難度可用題數不足 → 不寫入任何東西，回 `INSUFFICIENT_QUESTIONS` 並列出缺口。
-4. 通過後，以預設 `score_each` 加入 `exam_questions`，接在現有題目之後。
+4. 通過後，以 `score_each`（預設 1）加入 `exam_questions`，`sort_order` 接在現有題目之後；回應是**新加入的題目**，`meta` 帶新增數、總題數與總分。
+5. 一份考卷最多 200 題。
 
 `ORDER BY RAND()` 在題庫數千題以內效能足夠；超過時改為「先取符合條件的 ID，在 PHP 端洗牌取樣」。
 
 ### 5.3 發佈檢查
 
-發佈前一併驗證，**全部通過才改狀態**，未通過時 `details` 列出所有失敗規則：
+發佈前一併驗證，**全部通過才改狀態**，未通過時 `details` 列出**所有**失敗規則（沒有題目時只回報 `no_questions`，因為總分相關的檢查沒有意義）：
+
+發佈、撤回、關閉都在 transaction 內先鎖住考卷，再重新讀取狀態，所以兩個人同時操作時只有一個成功。
 
 | 規則 | 條件 |
 | --- | --- |
 | `no_questions` | 至少 1 題 |
 | `question_inactive` | 所有題目 `is_active = 1` |
-| `question_shape_invalid` | 每題符合 §4.1 題型規則 |
+| `question_shape_invalid` | 每題符合 §4.1 題型規則（直接檢查資料庫中的選項，不信任當初新增時的驗證），`details` 附上原因 |
 | `total_score_zero` | 總分 > 0 |
 | `pass_score_exceeds_total` | `pass_score ≤ 總分` |
 | `invalid_window` | 同時設定時 `start_time < end_time` |
@@ -247,8 +252,12 @@ stateDiagram-v2
 | 狀態 | 可修改 |
 | --- | --- |
 | `draft` | 全部設定、題目與配分 |
-| `published` | `title`、延長 `end_time`；其餘鎖定 |
+| `published` | `title`；`end_time` 只能**延長**（新的結束時間必須晚於現在與原本的結束時間），或設為 `null` 移除結束時間；原本沒有結束時間的考卷不能再設定一個（等於縮短）。其餘鎖定，回 `EXAM_NOT_EDITABLE` 並列出被鎖定的欄位 |
 | `closed` | 僅 `title` |
+
+**刪除**：只有 `draft` 可以刪除（否則 `EXAM_NOT_EDITABLE`）；草稿卻有作答紀錄（異常資料）回 `HAS_ATTEMPTS`。
+
+**學生看到什麼**：草稿對學生「不存在」（404）；已發佈／已關閉的考卷，沒修課的學生回 `403 NOT_ENROLLED`；修課的學生只拿到設定與 `my_attempts`（`used`、`best_score`、`in_progress_attempt_id`、`can_start`），**永遠沒有題目內容**。`can_start` ⇔ 開放中 且 `used < max_attempts` 且沒有進行中的作答。
 
 **開放時段判定**：可開始作答 ⇔ `status = 'published'` 且（`start_time` 為空或 ≤ now）且（`end_time` 為空或 > now）。
 

@@ -1,0 +1,71 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Dev Server（php -S :8000）",
+      "type": "shell",
+      "command": "php -S localhost:8000 -t public public/router.php",
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "冒煙測試（M1）",
+      "type": "shell",
+      "command": "php tests/smoke_m1.php",
+      "problemMatcher": []
+    },
+    {
+      "label": "冒煙測試（M2）",
+      "type": "shell",
+      "command": "php tests/smoke_m2.php",
+      "problemMatcher": []
+    },
+    {
+      "label": "冒煙測試（M3）",
+      "type": "shell",
+      "command": "php tests/smoke_m3.php",
+      "problemMatcher": []
+    },
+    {
+      "label": "單元測試",
+      "type": "shell",
+      "command": "php tests/unit_domain.php",
+      "problemMatcher": []
+    },
+    {
+      "label": "Composer Install",
+      "type": "shell",
+      "command": "composer install",
+      "problemMatcher": []
+    },
+    {
+      "label": "PHPUnit：全部",
+      "type": "shell",
+      "command": "vendor/bin/phpunit",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Docker：啟動",
+      "type": "shell",
+      "command": "docker compose up -d",
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker：停止",
+      "type": "shell",
+      "command": "docker compose down",
+      "problemMatcher": []
+    },
+    {
+      "label": "DB：重建（schema + seed，Docker）",
+      "type": "shell",
+      "command": "docker compose exec -T db sh -c \"mysql -uroot -p$MYSQL_ROOT_PASSWORD quiz_system\" < database/schema.sql && docker compose exec -T db sh -c \"mysql -uroot -p$MYSQL_ROOT_PASSWORD quiz_system\" < database/seed.sql",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "bmewburn.vscode-intelephense-client",
+    "xdebug.php-debug",
+    "cweijan.vscode-mysql-client2",
+    "humao.rest-client",
+    "editorconfig.editorconfig",
+    "esbenp.prettier-vscode",
+    "bierner.markdown-mermaid",
+    "yzhang.markdown-all-in-one",
+    "ms-azuretools.vscode-docker",
+    "eamodio.gitlens"
+  ]
+}

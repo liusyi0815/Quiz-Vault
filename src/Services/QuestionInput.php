@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\Validator;
+use App\Domain\QuestionRules;
 use App\Support\AppException;
 
 /**
@@ -109,33 +110,14 @@ final class QuestionInput
             throw AppException::validation($errors);
         }
 
-        // ---- 題型規則 ----
-        $count = count($items);
-        $correct = count(array_filter($items, static fn (array $o): bool => $o['is_correct']));
-        $contents = array_map(static fn (array $o): string => mb_strtolower($o['content']), $items);
-        if (count(array_unique($contents)) !== $count) {
-            throw self::shape('options', '選項內容不可重複');
+        // ---- 題型規則（與考卷發佈檢查共用 Domain\QuestionRules）----
+        $problem = QuestionRules::problem($type, array_map(
+            static fn (array $o): array => ['content' => $o['content'], 'is_correct' => $o['is_correct']],
+            $items
+        ));
+        if ($problem !== null) {
+            throw self::shape('options', $problem);
         }
-
-        match ($type) {
-            'single' => match (true) {
-                $count < 2 || $count > 6 => throw self::shape('options', '單選題需要 2 到 6 個選項'),
-                $correct !== 1           => throw self::shape('options', '單選題必須恰有 1 個正確答案'),
-                default                  => null,
-            },
-            'multiple' => match (true) {
-                $count < 3 || $count > 8 => throw self::shape('options', '多選題需要 3 到 8 個選項'),
-                $correct < 1             => throw self::shape('options', '多選題至少要有 1 個正確答案'),
-                default                  => null,
-            },
-            'truefalse' => match (true) {
-                $count !== 2                                  => throw self::shape('options', '是非題必須恰有 2 個選項'),
-                !(in_array('對', array_column($items, 'content'), true)
-                  && in_array('錯', array_column($items, 'content'), true)) => throw self::shape('options', '是非題的選項必須是「對」與「錯」'),
-                $correct !== 1                                => throw self::shape('options', '是非題必須恰有 1 個正確答案'),
-                default                                       => null,
-            },
-        };
 
         // 依 sort_order（相同則依送來的順序）排序後，重新編號為 1..n
         usort($items, static fn (array $a, array $b): int => [$a['sort_order'], $a['i']] <=> [$b['sort_order'], $b['i']]);

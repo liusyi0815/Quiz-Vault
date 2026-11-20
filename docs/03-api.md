@@ -100,7 +100,7 @@
 | POST | `/exams/{exam_id}/unpublish` | 撤回為草稿 | T*、A | F-10 |
 | POST | `/exams/{exam_id}/close` | 關閉 | T*、A | F-10 |
 
-學生看到的 `GET /exams` 只包含**自己已修課程**且狀態為 `published` / `closed` 的考卷。`GET /exams/{exam_id}` 對學生**不回傳題目內容**，只回傳設定與 `my_attempts` 摘要（已作答次數、最高分、`can_start`）。
+學生看到的 `GET /exams` 只包含**自己已修課程**且狀態為 `published` / `closed` 的考卷。`GET /exams/{exam_id}` 對學生**不回傳題目內容**，只回傳設定與 `my_attempts` 摘要（已作答次數、最高分、`can_start`）；草稿對學生是 `404`，沒修課的學生回 `403 NOT_ENROLLED`。老師看別人的考卷回 `404`。範例見 [§3.18](#318-考卷)。
 
 ### 2.5 作答與批改
 
@@ -231,7 +231,9 @@
 }
 ```
 
-`200`（成功）回傳新加入的題目清單；`409`（題數不足）：
+`by_difficulty`（各難度題數，鍵只能是 `"1"`、`"2"`、`"3"`）與 `count`（不分難度的總題數）擇一；`chapter_ids` 不給代表整門課；`tags` 帶有**任何一個**即可；`score_each` 預設 1。
+
+`200`（成功）回傳**新加入的題目清單**，`meta` 帶 `added`、`question_count`、`total_score`；`409`（題數不足，**整批都不寫入**）：
 
 ```json
 {
@@ -560,6 +562,85 @@ body 可選，帶入最後尚未暫存的答案（逾時後送來的答案會被
 `PATCH /questions/{question_id}` 只能改 `chapter_id`、`difficulty`、`explanation`、`is_active`、`tags`；送出 `type`、`content`、`options` 會回 `400`。
 
 `DELETE /questions/{question_id}` 回 `204`，是軟刪除（`is_active = false`）；用 `PATCH` 送 `{ "is_active": true }` 可復原。
+
+### 3.18 考卷
+
+`POST /exams`
+
+```json
+{
+  "course_id": 1, "title": "第一次小考", "duration_min": 30,
+  "start_time": "2026-11-20T09:00:00+08:00", "end_time": "2026-11-27T23:59:00+08:00",
+  "pass_score": 60, "max_attempts": 2
+}
+```
+
+`start_time`、`end_time` 可不給（不限時段）；沒有時區的字串視為本地時間，UTC（`Z`）會轉成 `+08:00`。`pass_score` 預設 60、`max_attempts` 預設 1。
+
+`201`（老師視角：多了 `creator_id`、`attempt_count` 與 `questions`）
+
+```json
+{
+  "data": {
+    "exam_id": 12,
+    "course": { "course_id": 1, "name": "資料庫與網頁設計" },
+    "title": "第一次小考",
+    "status": "draft", "effective_status": "draft", "is_open": false,
+    "duration_min": 30,
+    "start_time": "2026-11-20T09:00:00+08:00", "end_time": "2026-11-27T23:59:00+08:00",
+    "pass_score": 60, "max_attempts": 2,
+    "question_count": 0, "total_score": 0,
+    "created_at": "2026-11-10T15:00:00+08:00",
+    "creator_id": 2, "attempt_count": 0, "questions": []
+  }
+}
+```
+
+| 欄位 | 說明 |
+| --- | --- |
+| `status` | 資料庫中的狀態：`draft` / `published` / `closed` |
+| `effective_status` | 已發佈但超過 `end_time` 顯示為 `ended`，其餘與 `status` 相同（讀取時判斷，不需要排程） |
+| `is_open` | 現在可以開始作答嗎（已發佈，且在開放時段內） |
+
+`PATCH /exams/{exam_id}`：欄位同上，只送要改的；`course_id` 不能改。**各狀態可改的欄位**：草稿全部可改；已發佈只能改 `title` 與延長 `end_time`（可設為 `null` 移除結束時間）；已關閉只能改 `title`。被鎖定的欄位回 `409 EXAM_NOT_EDITABLE`，`details` 列出欄位名稱。
+
+`DELETE /exams/{exam_id}` 回 `204`，只有草稿可以刪除；題目清單隨考卷一併刪除，題目本身不受影響。
+
+**老師看考卷詳情的 `questions`**（不含選項與正確答案，要看請用 `GET /questions/{id}`）：
+
+```json
+{
+  "question_id": 3, "chapter": { "chapter_id": 1, "name": "SQL 基礎" }, "type": "multiple",
+  "content": "下列哪些屬於 DML（資料操作語言）指令？", "difficulty": 2, "is_active": true,
+  "score": 10, "sort_order": 1
+}
+```
+
+**學生看考卷詳情**：沒有 `questions`、`creator_id`、`attempt_count`，多了 `my_attempts`：
+
+```json
+{
+  "data": {
+    "exam_id": 12, "title": "第一次小考", "status": "published", "effective_status": "published", "is_open": true,
+    "duration_min": 30, "pass_score": 60, "max_attempts": 2, "question_count": 10, "total_score": 100,
+    "my_attempts": { "used": 1, "max_attempts": 2, "best_score": 70.5, "in_progress_attempt_id": null, "can_start": true }
+  }
+}
+```
+
+`can_start` 為 `true` 的條件：開放中、`used < max_attempts`、沒有進行中的作答。學生的 `GET /exams` 每一筆也帶有 `my_attempts`。
+
+### 3.19 狀態轉換
+
+| 請求 | 成功 | 失敗 |
+| --- | --- | --- |
+| `POST /exams/{id}/publish` | `200`：`{ "exam_id", "status": "published", "total_score" }` | 不是草稿 `409 EXAM_INVALID_STATE`；檢查未通過 `409 EXAM_PUBLISH_CHECK_FAILED`（一次列出所有失敗規則，見 §3.5） |
+| `POST /exams/{id}/unpublish` | `200`：`status` 回到 `draft` | 不是已發佈 `409 EXAM_INVALID_STATE`；已有任何作答 `409 HAS_ATTEMPTS` |
+| `POST /exams/{id}/close` | `200`：`status` 為 `closed` | 不是已發佈 `409 EXAM_INVALID_STATE` |
+
+已關閉是終態。草稿以外的考卷不能改題目、配分與隨機抽題（`409 EXAM_NOT_EDITABLE`）。
+
+`details` 裡的 `rule` 值：`no_questions`、`question_inactive`（附 `question_id`）、`question_shape_invalid`（附 `question_id`、`reason`）、`total_score_zero`、`pass_score_exceeds_total`（附 `pass_score`、`total_score`）、`invalid_window`、`end_in_past`、`duration_invalid`。
 
 ## 4. 錯誤碼
 

@@ -115,3 +115,63 @@ function summary(): int
     echo "\n結果：通過 {$GLOBALS['smoke_pass']} 項，失敗 {$GLOBALS['smoke_fail']} 項\n";
     return $GLOBALS['smoke_fail'] === 0 ? 0 : 1;
 }
+
+/** 登入並回傳 [Client, csrf_token, user_id]；失敗直接結束 */
+function loginAs(string $base, string $email, string $password): array
+{
+    $c = new Client($base);
+    $r = $c->call('POST', '/auth/login', ['email' => $email, 'password' => $password]);
+    if ($r[0] !== 200) {
+        fwrite(STDERR, "登入失敗：{$email}（HTTP {$r[0]} " . ($r[1]['error']['code'] ?? '') . "）\n");
+        exit(2);
+    }
+    return [$c, (string) $r[1]['data']['csrf_token'], (int) $r[1]['data']['user']['user_id']];
+}
+
+/** 註冊一位測試學生並登入，回傳 [Client, csrf_token, user_id, email] */
+function registerStudent(string $base, string $tag): array
+{
+    $c = new Client($base);
+    $email = strtolower('smoke+' . $tag . bin2hex(random_bytes(2)) . '@example.test');   // 系統會把 email 轉成小寫
+    $pw = 'SmokeTest#' . bin2hex(random_bytes(3));
+    $c->call('POST', '/auth/register', ['username' => "冒煙學生{$tag}", 'email' => $email, 'password' => $pw]);
+    $r = $c->call('POST', '/auth/login', ['email' => $email, 'password' => $pw]);
+    return [$c, (string) $r[1]['data']['csrf_token'], (int) $r[1]['data']['user']['user_id'], $email];
+}
+
+/** opts(['A', true], ['B', false]) → 題目選項陣列 */
+function opts(array ...$list): array
+{
+    return array_map(static fn (array $o): array => ['content' => $o[0], 'is_correct' => $o[1]], $list);
+}
+
+/** 現在加減幾秒後的 ISO 8601 時間（含時區） */
+function isoAt(int $offsetSeconds): string
+{
+    $tz = new DateTimeZone(App\Core\Config::get('APP_TIMEZONE', 'Asia/Taipei'));
+    return (new DateTimeImmutable('now', $tz))->modify(($offsetSeconds >= 0 ? '+' : '') . $offsetSeconds . ' seconds')->format('c');
+}
+
+/**
+ * 清除所有冒煙測試資料：以 [smoke] 開頭的課程（連同章節、題目、考卷、作答、修課）、
+ * smoke+...@example.test 的使用者、[smoke] 開頭的標籤。需要 .env 的資料庫帳號有 DELETE 權限。
+ */
+function smokeCleanup(PDO $pdo): void
+{
+    $courses = "(SELECT course_id FROM courses WHERE name LIKE '[smoke]%')";
+    $pdo->beginTransaction();
+    $pdo->exec("DELETE FROM exam_attempts WHERE exam_id IN (SELECT exam_id FROM exams WHERE course_id IN {$courses} OR title LIKE '[smoke]%')");
+    $pdo->exec("DELETE FROM exams WHERE course_id IN {$courses} OR title LIKE '[smoke]%'");
+    $pdo->exec("DELETE q FROM questions q JOIN chapters ch ON ch.chapter_id = q.chapter_id WHERE ch.course_id IN {$courses}");
+    $pdo->exec("DELETE FROM courses WHERE name LIKE '[smoke]%'");
+    $pdo->exec("DELETE FROM users WHERE email LIKE 'smoke+%@example.test'");
+    $pdo->exec("DELETE FROM tags WHERE name LIKE '[smoke]%'");
+    $pdo->commit();
+}
+
+/** 回應的 data 裡有這個欄位，而且值是 null（?? 會把 null 當成「沒有」，所以不能用它判斷） */
+function isNullField(array $res, string $key): bool
+{
+    return array_key_exists($key, $res[1]['data'] ?? []) && $res[1]['data'][$key] === null;
+}
+

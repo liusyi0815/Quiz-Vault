@@ -40,42 +40,8 @@ foreach (['TEACHER1', 'TEACHER2'] as $must) {
     }
 }
 
-function loginAs(string $base, string $email, string $password): array
-{
-    $c = new Client($base);
-    $r = $c->call('POST', '/auth/login', ['email' => $email, 'password' => $password]);
-    if ($r[0] !== 200) {
-        fwrite(STDERR, "登入失敗：{$email}（HTTP {$r[0]} " . ($r[1]['error']['code'] ?? '') . "）\n");
-        exit(2);
-    }
-    return [$c, (string) $r[1]['data']['csrf_token'], (int) $r[1]['data']['user']['user_id']];
-}
-
-function registerStudent(string $base, string $tag): array
-{
-    $c = new Client($base);
-    $email = strtolower('smoke+' . $tag . bin2hex(random_bytes(2)) . '@example.test');   // 系統會把 email 轉成小寫
-    $pw = 'SmokeTest#' . bin2hex(random_bytes(3));
-    $c->call('POST', '/auth/register', ['username' => "冒煙學生{$tag}", 'email' => $email, 'password' => $pw]);
-    $r = $c->call('POST', '/auth/login', ['email' => $email, 'password' => $pw]);
-    return [$c, (string) $r[1]['data']['csrf_token'], (int) $r[1]['data']['user']['user_id'], $email];
-}
-
-function opts(array ...$list): array
-{
-    return array_map(static fn (array $o): array => ['content' => $o[0], 'is_correct' => $o[1]], $list);
-}
-
 $pdo = App\Core\Database::connection();
-$cleanup = static function () use ($pdo): void {
-    $pdo->beginTransaction();
-    $pdo->exec("DELETE FROM exams WHERE title LIKE '[smoke]%'");
-    $pdo->exec("DELETE q FROM questions q JOIN chapters ch ON ch.chapter_id = q.chapter_id JOIN courses c ON c.course_id = ch.course_id WHERE c.name LIKE '[smoke]%'");
-    $pdo->exec("DELETE FROM courses WHERE name LIKE '[smoke]%'");
-    $pdo->exec("DELETE FROM users WHERE email LIKE 'smoke+%@example.test'");
-    $pdo->exec("DELETE FROM tags WHERE name LIKE '[smoke]%'");
-    $pdo->commit();
-};
+$cleanup = static fn () => smokeCleanup($pdo);
 $cleanup();   // 先清掉上次可能殘留的測試資料
 
 [$t1, $t1C, $t1Id] = loginAs($base, $accounts['TEACHER1'], $passwords['TEACHER1']);

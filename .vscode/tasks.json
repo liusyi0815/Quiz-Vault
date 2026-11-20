@@ -22,6 +22,18 @@
       "problemMatcher": []
     },
     {
+      "label": "冒煙測試（M3）",
+      "type": "shell",
+      "command": "php tests/smoke_m3.php",
+      "problemMatcher": []
+    },
+    {
+      "label": "單元測試",
+      "type": "shell",
+      "command": "php tests/unit_domain.php",
+      "problemMatcher": []
+    },
+    {
       "label": "Composer Install",
       "type": "shell",
       "command": "composer install",

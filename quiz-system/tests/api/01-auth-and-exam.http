@@ -1,0 +1,58 @@
+# 需安裝 VS Code 擴充「REST Client」(humao.rest-client)
+# 點每段上方的「Send Request」。Cookie 會自動保留，csrf 取自登入回應。
+@host = http://localhost:8000/api/v1
+
+### 1. 登入（帳號請換成 seed.sql 內的測試帳號）
+# @name login
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "teacher1@example.edu.tw", "password": "<從 credentials-private.csv 取得 teacher1 的密碼>" }
+
+###
+@csrf = {{login.response.body.data.csrf_token}}
+
+### 2. 目前使用者
+GET {{host}}/me
+
+### 3. 課程列表
+GET {{host}}/courses?mine=1
+
+### 4. 新增題目（多選）
+POST {{host}}/questions
+Content-Type: application/json
+X-CSRF-Token: {{csrf}}
+
+{
+  "chapter_id": 1,
+  "type": "multiple",
+  "content": "下列哪些屬於 DML 指令？",
+  "difficulty": 2,
+  "explanation": "DML 用於操作資料。",
+  "options": [
+    { "content": "SELECT", "is_correct": true,  "sort_order": 1 },
+    { "content": "INSERT", "is_correct": true,  "sort_order": 2 },
+    { "content": "CREATE", "is_correct": false, "sort_order": 3 }
+  ],
+  "tags": ["SQL", "DML"]
+}
+
+### 5. 發佈考卷
+POST {{host}}/exams/1/publish
+X-CSRF-Token: {{csrf}}
+
+### 6. 登出
+POST {{host}}/auth/logout
+X-CSRF-Token: {{csrf}}
+
+### 7. 管理員重設密碼（F-22）
+# 先把第 1 步的 email 改成 admin@example.edu.tw 重新登入，csrf 才會是管理員的
+POST {{host}}/admin/users/24/reset-password
+X-CSRF-Token: {{csrf}}
+
+### 8. 使用者修改密碼（以臨時密碼登入後）
+PUT {{host}}/me/password
+Content-Type: application/json
+X-CSRF-Token: {{csrf}}
+
+{ "old_password": "臨時密碼", "new_password": "MyNewPass#2026" }

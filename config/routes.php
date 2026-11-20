@@ -7,6 +7,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChapterController;
 use App\Http\Controllers\CourseController;
 use App\Http\Controllers\EnrollmentController;
+use App\Http\Controllers\ExamController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\QuestionController;
 
@@ -64,4 +65,16 @@ return static function (Router $r): void {
     $r->add('PUT',    '/questions/{question_id}',  [QuestionController::class, 'replace'], $teacher);
     $r->add('PATCH',  '/questions/{question_id}',  [QuestionController::class, 'patch'],   $teacher);
     $r->add('DELETE', '/questions/{question_id}',  [QuestionController::class, 'destroy'], $teacher);
+
+    // ---------- 考卷：建立、組卷、隨機抽題、發佈（F-08、F-09、F-10）----------
+    $r->add('GET',    '/exams',                            [ExamController::class, 'index'],          $user);
+    $r->add('POST',   '/exams',                            [ExamController::class, 'store'],          $teacher);
+    $r->add('GET',    '/exams/{exam_id}',                  [ExamController::class, 'show'],           $user);
+    $r->add('PATCH',  '/exams/{exam_id}',                  [ExamController::class, 'update'],         $teacher);
+    $r->add('DELETE', '/exams/{exam_id}',                  [ExamController::class, 'destroy'],        $teacher);
+    $r->add('PUT',    '/exams/{exam_id}/questions',        [ExamController::class, 'replaceQuestions'], $teacher);
+    $r->add('POST',   '/exams/{exam_id}/questions/random', [ExamController::class, 'drawRandom'],     $teacher);
+    $r->add('POST',   '/exams/{exam_id}/publish',          [ExamController::class, 'publish'],        $teacher);
+    $r->add('POST',   '/exams/{exam_id}/unpublish',        [ExamController::class, 'unpublish'],      $teacher);
+    $r->add('POST',   '/exams/{exam_id}/close',            [ExamController::class, 'close'],          $teacher);
 };
