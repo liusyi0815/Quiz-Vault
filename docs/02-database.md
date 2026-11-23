@@ -33,6 +33,7 @@ MySQL 8.0.16+ 或 **XAMPP 內建的 MariaDB 10.4+**，資料庫名 `quiz_system`
 | `chapters` | `chapter_id` PK、`course_id` FK、`sort_order` |
 | `questions` | `question_id` PK、`chapter_id` FK、`creator_id` FK、`type`、`difficulty`、`explanation`、`is_active` |
 | `question_options` | `option_id` PK、`question_id` FK、`is_correct`、`sort_order` |
+|`question_tags`|`(question_id, tag_id) PK` `tag_id` FK|
 | `tags` | `tag_id` PK、`name` UNIQUE |
 | `exams` | `exam_id` PK、`course_id` FK、`creator_id` FK、`duration_min`、`start_time`、`end_time`、`pass_score`、`max_attempts`、`status` |
 | `exam_questions` | `(exam_id, question_id)` PK、`score`、`sort_order` |
