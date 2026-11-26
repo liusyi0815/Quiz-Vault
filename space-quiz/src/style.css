@@ -323,7 +323,8 @@ code {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(20, 20, 35, 0.75);
+    backdrop-filter: blur(10px);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -340,7 +341,7 @@ code {
 
 /* Modal 內容框 */
 .modal-box {
-    background: #1a1a2e;
+    background:linear-gradient(135deg, #a0a0a0 0%, #5d5f5f 100%);
     border: 2px solid #4a4e69;
     padding: 30px;
     border-radius: 12px;
@@ -352,15 +353,15 @@ code {
 
 .modal-box h3 {
     margin-bottom: 15px;
-    color: #89d8ff;
+    color: #1b1b1b;
 }
 
 .modal-box input {
     width: 100%;
     padding: 10px;
     margin-bottom: 20px;
-    background: #16213e;
-    border: 1px solid #0f3460;
+    background: #c1c0c0;
+    border: 1px solid #908e8e;
     color: #fff;
     border-radius: 6px;
     box-sizing: border-box;
@@ -382,13 +383,13 @@ code {
 }
 
 .btn-confirm {
-    background: #e94560;
-    color: white;
+    background: #e3f7b1;
+    color: #090b5b;
 }
 
 .btn-cancel {
-    background: #533483;
-    color: white;
+    background: #cbdae4;
+    color: #090b5b;
 }
 /* 左上角固定按鈕：加入課程 */
 .top-left-join-btn {
@@ -430,16 +431,16 @@ code {
 /* 科目 HUD 資訊面板（固定在畫面上方或右上角） */
 .subject-hud {
     position: fixed;
-    top: 25px;
-    right: 25px;
-    background: rgba(26, 26, 46, 0.85);
-    border: 2px solid #4a4e69;
+    top: 540px;
+    right: 688px;
+    background: rgba(150, 150, 157, 0.25);
+    border: none;
     border-radius: 12px;
     padding: 15px 25px;
     color: #ffffff;
     z-index: 100;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(5px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     font-family: inherit;
     pointer-events: none; /* 讓滑鼠點擊可以穿透，不干擾 3D 操作 */
     transition: all 0.3s ease;
@@ -447,7 +448,7 @@ code {
 
 .subject-hud h2 {
     margin: 0 0 8px 0;
-    color: #89d8ff;
+    color: #ffffff;
     font-size: 20px;
     letter-spacing: 1px;
 }
@@ -459,7 +460,7 @@ code {
 }
 
 .subject-hud span {
-    color: #ffe84a;
+    color: #f9f452;
     font-weight: bold;
 }
 
@@ -479,7 +480,7 @@ canvas {
     top: 25px;
     left: 25px;
     background: rgba(26, 26, 46, 0.85);
-    border: 2px solid #89d8ff;
+    border: 2px solid #aab4b9;
     border-radius: 30px;
     padding: 8px 20px;
     color: #ffffff;
@@ -525,8 +526,8 @@ canvas {
     pointer-events: auto;
 }
 .quiz-box {
-    background: #1a1a2e;
-    border: 2px solid #89d8ff;
+    background: linear-gradient(135deg, #a0a0a0 0%, #5d5f5f 100%);
+    border: 2px solid #4f646e;
     padding: 30px;
     border-radius: 16px;
     width: 450px;
@@ -535,7 +536,7 @@ canvas {
     text-align: left;
 }
 .quiz-box h3 {
-    color: #89d8ff;
+    color: #3f3f3f;
     margin-top: 0;
     margin-bottom: 15px;
     font-size: 22px;
@@ -547,8 +548,8 @@ canvas {
 }
 .option-label {
     display: block;
-    background: #16213e;
-    border: 1px solid #0f3460;
+    background: #b8b8b9;
+    border: 1px solid #b2b2b3;
     padding: 10px 15px;
     margin-bottom: 10px;
     border-radius: 8px;
@@ -556,7 +557,7 @@ canvas {
     transition: all 0.2s;
 }
 .option-label:hover {
-    background: #1f305e;
+    background: #4b4b4b;
     border-color: #89d8ff;
 }
 .option-label input {
@@ -565,8 +566,8 @@ canvas {
 
 /* 成績與解析面板樣式 */
 .result-box {
-    background: #1a1a2e;
-    border: 2px solid #89d8ff;
+    background: #d1d2d4;
+    border: 2px solid #08415e;
     padding: 30px;
     border-radius: 16px;
     width: 500px;
@@ -577,13 +578,13 @@ canvas {
     overflow-y: auto;
 }
 .result-box h3 {
-    color: #89d8ff;
+    color: #0659ad;
     margin-top: 0;
     margin-bottom: 15px;
     font-size: 22px;
 }
 .result-stat-card {
-    background: #16213e;
+    background: #2f383e;
     border: 1px solid #0f3460;
     padding: 15px;
     border-radius: 10px;
@@ -605,4 +606,69 @@ canvas {
     padding: 12px;
     border-radius: 8px;
     margin-bottom: 10px;
+}
+
+/* 測驗列表：每一場考試卡片 */
+.exam-item-card {
+    background: #d1d2d4;
+    border: 1px solid rgb(126, 132, 138);
+    padding: 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.exam-item-card:hover {
+    border-color: #89d8ff;
+    background: #707273;
+}
+
+.exam-item-title {
+    font-weight: bold;
+    color: #ffffff;
+    font-size: 16px;
+    margin-bottom: 4px;
+}
+
+.exam-item-meta {
+    font-size: 13px;
+    color: #1a1a1a;
+}
+
+.exam-item-btn {
+    background: #ebe771;
+    color: #333333;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+/* 3D 物件 Hover 純文字提示 */
+.hover-tooltip {
+    position: fixed;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    color: #ffffff;
+    padding: 0;
+    border-radius: 0;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9), 0 0 12px rgba(137, 216, 255, 0.6);
+    pointer-events: none;
+    z-index: 500;
+    opacity: 0;
+    transform: translate(14px, 14px);
+    transition: opacity 0.15s ease;
+    white-space: nowrap;
+}
+
+.hover-tooltip.visible {
+    opacity: 1;
 }

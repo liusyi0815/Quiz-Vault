@@ -24,6 +24,7 @@ export class MainScene {
         this.createPlanets();
         this.createJoinPlanet();
         this.createCharacter();
+        this.createHoverTooltipDOM();
         
         this.createJoinModalDOM(); 
         this.createStudentInfoModalDOM(); 
@@ -128,6 +129,27 @@ export class MainScene {
         this.joinPlanet = new Planet("加入課程", 0x888888, 0, 2.0, "/join-planet.jpg");
         this.joinPlanet.mesh.position.set(-20, 15, 0);
         this.scene.add(this.joinPlanet.mesh);
+    }
+
+    // 建立浮動提示字樣 DOM
+    createHoverTooltipDOM() {
+        const tooltipHTML = `<div id="hoverTooltip" class="hover-tooltip"></div>`;
+        document.body.insertAdjacentHTML("beforeend", tooltipHTML);
+        this.hoverTooltip = document.getElementById("hoverTooltip");
+    }
+
+    // 顯示或隱藏提示字樣並跟隨滑鼠
+    updateHoverTooltip(text, x, y) {
+        if (!this.hoverTooltip) return;
+
+        if (text) {
+            this.hoverTooltip.innerText = text;
+            this.hoverTooltip.style.left = `${x}px`;
+            this.hoverTooltip.style.top = `${y}px`;
+            this.hoverTooltip.classList.add("visible");
+        } else {
+            this.hoverTooltip.classList.remove("visible");
+        }
     }
 
     createCharacter() {
@@ -310,7 +332,7 @@ export class MainScene {
             <div id="joinModal" class="modal-overlay">
                 <div class="modal-box">
                     <h3>加入新課程</h3>
-                    <p style="font-size: 14px; color: #aaa; margin-bottom: 15px;">請輸入老師提供的課程代碼</p>
+                    <p style="font-size: 14px; color: #000000; margin-bottom: 15px;">請輸入老師提供的課程代碼</p>
                     <input type="text" id="courseCodeInput" placeholder="例如：MATH101" />
                     <div class="modal-actions">
                         <button class="btn-cancel" id="closeModalBtn">取消</button>
@@ -354,12 +376,12 @@ export class MainScene {
                     <h3>學生個人檔案</h3>
                     <div class="student-info-content">
                         <div style="margin-bottom: 12px; text-align: left;">
-                            <label style="font-size: 14px; color: #89d8ff; display: block; margin-bottom: 4px;">姓名：</label>
-                            <input type="text" id="editStudentName" value="${savedName}" style="width: 100%; padding: 8px; background: #16213e; border: 1px solid #0f3460; color: #fff; border-radius: 6px; box-sizing: border-box;" />
+                            <label style="font-size: 14px; color: #101010; display: block; margin-bottom: 4px;">姓名：</label>
+                            <input type="text" id="editStudentName" value="${savedName}" style="width: 100%; padding: 8px; background: #d1d2d4; border: 1px solid #a0a0a0; color: #313131; border-radius: 6px; box-sizing: border-box;" />
                         </div>
                         <div style="margin-bottom: 12px; text-align: left;">
-                            <label style="font-size: 14px; color: #89d8ff; display: block; margin-bottom: 4px;">學號：</label>
-                            <input type="text" id="editStudentId" value="${savedId}" style="width: 100%; padding: 8px; background: #16213e; border: 1px solid #0f3460; color: #fff; border-radius: 6px; box-sizing: border-box;" />
+                            <label style="font-size: 14px; color: #101010; display: block; margin-bottom: 4px;">學號：</label>
+                            <input type="text" id="editStudentId" value="${savedId}" style="width: 100%; padding: 8px; background: #d1d2d4; border: 1px solid #a0a0a0; color: #313131; border-radius: 6px; box-sizing: border-box;" />
                         </div>
                         <p style="margin: 8px 0; font-size: 14px; color: #e0e0e0;">身份：<span>Student (學生)</span></p>
                         <p style="margin: 8px 0; font-size: 14px; color: #e0e0e0;">已修課程：<span>數學、國文、英文、自然</span></p>
@@ -399,10 +421,18 @@ export class MainScene {
 
     bindEvents() {
         window.addEventListener("mousemove", (event) => {
-            // 如果有任何 Modal 正在開啟中，直接中斷，不進行 3D 浮動發光檢測
-            if (document.querySelector('.modal-overlay.active') || document.querySelector('.quiz-modal-overlay.active')) return;
-            if (event.target.closest('.modal-overlay.active') || event.target.closest('.quiz-modal-overlay.active')) return;
-            
+            // 若有彈窗開啟，隱藏提示字樣並中斷 3D Hover
+            if (
+                document.querySelector(".modal-overlay.active") ||
+                document.querySelector(".quiz-modal-overlay.active") ||
+                event.target.closest(".modal-overlay.active") ||
+                event.target.closest(".quiz-modal-overlay.active")
+            ) {
+                this.updateHoverTooltip(null);
+                document.body.style.cursor = "default";
+                return;
+            }
+
             this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
             this.raycaster.setFromCamera(this.mouse, this.camera);
@@ -411,9 +441,18 @@ export class MainScene {
             objects.push(this.character.mesh);
             objects.push(this.joinPlanet.mesh);
 
+            // 進入考試場景後，將書本、鉛筆、旗幟納入射線偵測
+            if (this.isExamMode && this.examGroup) {
+                this.examGroup.traverse(child => {
+                    if (child.isMesh) objects.push(child);
+                });
+            }
+
             const intersects = this.raycaster.intersectObjects(objects, true);
 
+            // 重置游標、發光與提示字樣
             document.body.style.cursor = "default";
+            this.updateHoverTooltip(null);
             this.planets.forEach(p => p.mesh.material.emissive.setHex(0x000000));
             this.joinPlanet.mesh.material.emissive.setHex(0x000000);
             this.character.mesh.traverse(child => {
@@ -421,24 +460,64 @@ export class MainScene {
                     child.material.emissive.setHex(0x000000);
                 }
             });
+            if (this.examGroup) {
+                this.examGroup.traverse(child => {
+                    if (child.isMesh && child.material.emissive) {
+                        child.material.emissive.setHex(0x000000);
+                    }
+                });
+            }
 
             if (intersects.length > 0) {
-                document.body.style.cursor = "pointer";
                 const hovered = intersects[0].object;
 
+                // 往上尋找所屬群組的 userData.type（適用於 Group 結構的書本與鉛筆）
+                let targetObj = hovered;
+                let objectType = targetObj.userData.type;
+                while (!objectType && targetObj.parent) {
+                    targetObj = targetObj.parent;
+                    objectType = targetObj.userData.type;
+                }
+
+                if (this.isExamMode && objectType === "exam_book") {
+                    document.body.style.cursor = "pointer";
+                    this.updateHoverTooltip("成績與解析", event.clientX, event.clientY);
+                    targetObj.traverse(child => {
+                        if (child.isMesh && child.material.emissive) {
+                            child.material.emissive.setHex(0x444444);
+                        }
+                    });
+                    return;
+                }
+
+                if (this.isExamMode && objectType === "exam_pencil") {
+                    document.body.style.cursor = "pointer";
+                    this.updateHoverTooltip("考試清單", event.clientX, event.clientY);
+                    targetObj.traverse(child => {
+                        if (child.isMesh && child.material.emissive) {
+                            child.material.emissive.setHex(0x444444);
+                        }
+                    });
+                    return;
+                }
+
+                // 原有星球與角色 Hover 邏輯
                 if (hovered.userData.type === "planet" || hovered === this.joinPlanet.mesh) {
+                    document.body.style.cursor = "pointer";
                     let rootMesh = hovered;
                     while (rootMesh.parent && rootMesh.parent !== this.scene) {
                         if (rootMesh.parent.type === "Mesh") rootMesh = rootMesh.parent;
                         else break;
                     }
                     if (rootMesh.material && rootMesh.material.emissive) {
-                        rootMesh.material.emissive.setHex(0xffaa00);// 更改這裡的HEX色碼 (例如 0xffaa00 改成金黃色)
+                        rootMesh.material.emissive.setHex(0xffaa00);
                         rootMesh.material.emissiveIntensity = 0.5;
                     }
+                } else if (hovered === this.character.mesh || this.character.mesh.getObjectById(hovered.id)) {
+                    document.body.style.cursor = "pointer";
                 }
-            }
-        });
+        }
+    });
 
         window.addEventListener("click", (event) => {
             // 1. 如果正在播放動畫，直接返回
@@ -688,7 +767,7 @@ export class MainScene {
             <div id="examSelectModal" class="quiz-modal-overlay">
                 <div class="quiz-box" style="width: 480px;">
                     <h3 id="examSelectTitle">選擇考試場次</h3>
-                    <p style="font-size: 14px; color: #aaa; margin-bottom: 15px;">請選擇您要進行的測驗項目：</p>
+                    <p style="font-size: 14px; color: #2a2a2a; margin-bottom: 15px;">請選擇您要進行的測驗項目：</p>
                     <div id="examListContainer" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;">
                         <!-- 動態產生考試場次清單 -->
                     </div>
@@ -721,45 +800,23 @@ export class MainScene {
         container.innerHTML = '';
         availableExams.forEach(exam => {
             const itemHTML = `
-                <div class="exam-item-card" data-exam-id="${exam.id}" data-exam-title="${exam.title}" style="
-                    background: #16213e;
-                    border: 1px solid #0f3460;
-                    padding: 15px;
-                    border-radius: 10px;
-                    cursor: pointer;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    transition: all 0.2s;
-                ">
+                <div class="exam-item-card" data-exam-id="${exam.id}" data-exam-title="${exam.title}">
                     <div>
-                        <div style="font-weight: bold; color: #fff; font-size: 16px; margin-bottom: 4px;">${exam.title}</div>
-                        <div style="font-size: 13px; color: #89d8ff;">題數：${exam.questionsCount} 題 ｜ 限時：${exam.time}</div>
+                        <div class="exam-item-title">${exam.title}</div>
+                        <div class="exam-item-meta">題數：${exam.questionsCount} 題 ｜ 限時：${exam.time}</div>
                     </div>
-                    <span style="
-                        background: #e94560;
-                        color: white;
-                        padding: 6px 12px;
-                        border-radius: 6px;
-                        font-size: 13px;
-                        font-weight: bold;
-                    ">開始作答 ➔</span>
+                    <span class="exam-item-btn">開始作答 ➔</span>
                 </div>
             `;
             container.insertAdjacentHTML('beforeend', itemHTML);
         });
 
-        // 綁定每一張考試卡片的點擊事件
+        // 綁定每一張考試卡片的點擊事件（Hover 效果已交由 CSS :hover 處理）
         container.querySelectorAll('.exam-item-card').forEach(card => {
-            // 滑鼠懸停發光效果
-            card.addEventListener('mouseenter', () => card.style.borderColor = '#89d8ff');
-            card.addEventListener('mouseleave', () => card.style.borderColor = '#0f3460');
-
-            // 點擊場次後，關閉場次列表，正式進入該場考試的作答頁面
             card.addEventListener('click', () => {
                 const examTitle = card.getAttribute('data-exam-title');
                 document.getElementById('examSelectModal').classList.remove('active');
-                this.startQuiz(examTitle); // 進入原本做好的作答頁面
+                this.startQuiz(examTitle);
             });
         });
 
@@ -815,15 +872,15 @@ export class MainScene {
                 </div>
             </div>
 
-            <h4 style="color: #89d8ff; margin-bottom: 10px; font-size: 16px;">📖 錯題解析記錄：</h4>
+            <h4 style="color: #232323; margin-bottom: 10px; font-size: 16px;">錯題解析記錄：</h4>
             <div id="wrongQuestionsList">
                 ${wrongCount > 0 ? `
                     <div class="wrong-question-item">
                         <div style="font-weight: bold; color: #fff; margin-bottom: 4px;">Q: 1 + 1 = ?</div>
-                        <div style="font-size: 13px; color: #ff9999;">你的答案：1 ｜ 正確答案：2</div>
-                        <div style="font-size: 12px; color: #ccc; margin-top: 4px;">解析：基本加法運算，1加1等於2。</div>
+                        <div style="font-size: 13px; color: #df1f1f;">你的答案：1 ｜ 正確答案：2</div>
+                        <div style="font-size: 12px; color: #393939; margin-top: 4px;">解析：基本加法運算，1加1等於2。</div>
                     </div>
-                ` : `<p style="color: #63ff7f; text-align: center; padding: 20px;">太棒了！目前沒有錯題紀錄，保持得非常好！</p>`}
+                ` : `<p style="color: #3e3e3e; text-align: center; padding: 20px;">太棒了！目前沒有錯題紀錄，保持得非常好！</p>`}
             </div>
         `;
 
