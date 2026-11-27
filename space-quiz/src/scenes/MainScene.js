@@ -471,6 +471,19 @@ export class MainScene {
             if (intersects.length > 0) {
                 const hovered = intersects[0].object;
 
+                if (
+                    this.joinPlanet &&
+                    (hovered === this.joinPlanet.mesh || this.joinPlanet.mesh.getObjectById(hovered.id))
+                ) {
+                    document.body.style.cursor = "pointer";
+                    this.updateHoverTooltip("加入課程", event.clientX, event.clientY);
+                    if (this.joinPlanet.mesh.material && this.joinPlanet.mesh.material.emissive) {
+                        this.joinPlanet.mesh.material.emissive.setHex(0x00aaff);
+                        this.joinPlanet.mesh.material.emissiveIntensity = 0.8;
+                    }
+                    return;
+                }
+
                 // 往上尋找所屬群組的 userData.type（適用於 Group 結構的書本與鉛筆）
                 let targetObj = hovered;
                 let objectType = targetObj.userData.type;
@@ -595,6 +608,8 @@ export class MainScene {
     }
 
     nextPlanet() {
+        if (this.isExamMode || this.isAnimating) return;
+
         this.currentIndex++;
         if (this.currentIndex >= this.planets.length) {
             this.currentIndex = 0;
@@ -607,6 +622,8 @@ export class MainScene {
     }
 
     previousPlanet() {
+        if (this.isExamMode || this.isAnimating) return;  
+
         this.currentIndex--;
         if (this.currentIndex < 0) {
             this.currentIndex = this.planets.length - 1;
