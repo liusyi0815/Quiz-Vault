@@ -4,7 +4,7 @@
 
 **技術**：PHP 8.2 + MySQL 8.0 + HTML / CSS / JavaScript（REST API，前後端分離）
 
-> 目前階段：**規劃書 + 資料庫 + 後端 M0～M3**。資料庫（`database/`）、後端骨架、帳號（F-01、F-02、F-22）、課程／修課／章節／題庫（F-03～F-06）、考卷與組卷與發佈（F-08～F-10）已完成並實測；作答批改（M4 之後）與前端頁面尚未開始。規劃文件放在 [`docs/`](docs/)。
+> 目前階段：**規劃書 + 資料庫 + 後端 M0～M4**。資料庫（`database/`）、後端骨架、帳號（F-01、F-02、F-22）、課程／修課／章節／題庫（F-03～F-06）、考卷與組卷與發佈（F-08～F-10）已完成並實測；作答與自動批改與成績與逾時處理（F-11、F-12、F-14、F-18）也已完成；簡答題評分、統計、錯題本（M5）與前端頁面尚未開始。規劃文件放在 [`docs/`](docs/)。
 
 ## 規劃書
 
@@ -90,6 +90,18 @@ quiz-system/
    php tests\smoke_m3.php
    ```
 
+   M4（作答、自動批改、成績與解析、逾時）的測試，帳號需求相同：
+
+   ```bat
+   php tests\smoke_m4.php
+   ```
+
+   逾時作答的排程處理（建議每分鐘一次，Windows 用工作排程器；沒排程也沒關係，讀取時會順便結算）：
+
+   ```bat
+   C:\xampp\php\php.exe bin\finalize_overdue.php
+   ```
+
    另有**不需要伺服器與資料庫**的單元測試，驗證題型規則、開放時段（邊界到秒）、發佈檢查與日期解析：
 
    ```bat
@@ -124,6 +136,12 @@ quiz-system/
 | PUT | `/exams/{exam_id}/questions` | 整份取代題目與配分（F-08） |
 | POST | `/exams/{exam_id}/questions/random` | 隨機抽題加入（F-09） |
 | POST | `/exams/{exam_id}/publish`、`/unpublish`、`/close` | 發佈（含發佈檢查）、撤回、關閉（F-10） |
+| POST / GET | `/exams/{exam_id}/attempts` | 學生開始作答（F-11）／全班作答列表（老師、管理員） |
+| GET | `/attempts/{attempt_id}` | 續答：題目與已暫存的答案（不含正確答案） |
+| PUT | `/attempts/{attempt_id}/answers/{question_id}` | 暫存單題答案 |
+| POST | `/attempts/{attempt_id}/submit` | 交卷並自動批改（F-12） |
+| GET | `/attempts/{attempt_id}/result` | 成績；考卷結束後才有逐題結果與解析（F-14） |
+| GET | `/me/attempts` | 我的作答紀錄 |
 
 > `public/router.php` 只供 `php -S` 開發用；Apache / XAMPP 環境走 `public/api/.htaccess`。
 

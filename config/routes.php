@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Core\Router;
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\AttemptController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChapterController;
 use App\Http\Controllers\CourseController;
@@ -77,4 +78,13 @@ return static function (Router $r): void {
     $r->add('POST',   '/exams/{exam_id}/publish',          [ExamController::class, 'publish'],        $teacher);
     $r->add('POST',   '/exams/{exam_id}/unpublish',        [ExamController::class, 'unpublish'],      $teacher);
     $r->add('POST',   '/exams/{exam_id}/close',            [ExamController::class, 'close'],          $teacher);
+
+    // ---------- 作答、批改、成績（F-11、F-12、F-14、F-18）----------
+    $r->add('POST', '/exams/{exam_id}/attempts',                       [AttemptController::class, 'start'],      $student);
+    $r->add('GET',  '/exams/{exam_id}/attempts',                       [AttemptController::class, 'forExam'],    $teacher);
+    $r->add('GET',  '/attempts/{attempt_id}',                          [AttemptController::class, 'show'],       $student);
+    $r->add('PUT',  '/attempts/{attempt_id}/answers/{question_id}',    [AttemptController::class, 'saveAnswer'], $student);
+    $r->add('POST', '/attempts/{attempt_id}/submit',                   [AttemptController::class, 'submit'],     $student);
+    $r->add('GET',  '/attempts/{attempt_id}/result',                   [AttemptController::class, 'result'],     $user);
+    $r->add('GET',  '/me/attempts',                                    [AttemptController::class, 'mine'],       $student);
 };

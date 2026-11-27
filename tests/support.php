@@ -50,6 +50,26 @@ final class Client
         curl_close($ch);
         return [$status, json_decode(substr($raw, $size), true) ?? [], substr($raw, 0, $size)];
     }
+
+    /** 送出「原始字串」當 body（用來測試不合法的 JSON） */
+    public function callRaw(string $method, string $path, string $rawBody, ?string $csrf = null): array
+    {
+        $headers = ['Accept: application/json', 'Content-Type: application/json'];
+        if ($csrf !== null) {
+            $headers[] = 'X-CSRF-Token: ' . $csrf;
+        }
+        $ch = curl_init($this->base . $path);
+        curl_setopt_array($ch, [
+            CURLOPT_CUSTOMREQUEST => $method, CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true,
+            CURLOPT_HTTPHEADER => $headers, CURLOPT_COOKIEFILE => $this->jar, CURLOPT_COOKIEJAR => $this->jar,
+            CURLOPT_TIMEOUT => 15, CURLOPT_POSTFIELDS => $rawBody,
+        ]);
+        $raw = (string) curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $size = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        curl_close($ch);
+        return [$status, json_decode(substr($raw, $size), true) ?? [], substr($raw, 0, $size)];
+    }
 }
 
 $GLOBALS['smoke_pass'] = 0;

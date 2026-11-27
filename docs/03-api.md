@@ -642,6 +642,16 @@ body 可選，帶入最後尚未暫存的答案（逾時後送來的答案會被
 
 `details` 裡的 `rule` 值：`no_questions`、`question_inactive`（附 `question_id`）、`question_shape_invalid`（附 `question_id`、`reason`）、`total_score_zero`、`pass_score_exceeds_total`（附 `pass_score`、`total_score`）、`invalid_window`、`end_in_past`、`duration_invalid`。
 
+### 3.20 作答的實際行為（M4）
+
+- `POST /exams/{id}/attempts`：草稿回 `404`，沒修課回 `403 NOT_ENROLLED`，不在開放時段回 `409 EXAM_NOT_OPEN`，已有作答中的回 `409 ATTEMPT_IN_PROGRESS`（`details` 帶 `attempt_id`），次數用完回 `409 ATTEMPT_LIMIT_REACHED`（`details` 帶 `used`、`max_attempts`）。回應含 `deadline_at` 與 `remaining_seconds`。
+- `deadline_at = min(started_at + duration_min, 考卷 end_time)`，伺服器允許 `ATTEMPT_GRACE_SECONDS`（預設 5）秒寬限。
+- 暫存是**整題取代**：`option_ids: []` 代表清除；單選、是非題最多 1 個選項；簡答題只接受 `answer_text`（最長 5000 字）。已交卷回 `409 ATTEMPT_NOT_EDITABLE`，已逾時回 `409 ATTEMPT_EXPIRED`。
+- `POST .../submit` 的 `answers` 選填，全部合法才寫入，任何一筆不合法就整批不寫入也不批改。已逾時才送來的答案會被忽略（`late=true`）。重複交卷回傳同一份結果。
+- `passed`：有簡答題待評分且目前未及格時為 `null`（未定）；人工評分只會加分，所以已及格就一定是 `true`。簡答題空白者直接 0 分。
+- `GET /attempts/{id}/result`：交卷後立刻有 `total_score`、`passed`；`answers_revealed` 為 `false` 時沒有逐題 `answers`，考卷關閉或超過結束時間後才為 `true`。老師與管理員隨時可看完整內容。作答中回 `409 ATTEMPT_NOT_SUBMITTED`。
+- 逾時處理：任何讀取發現已逾時就先結算；另有排程腳本 `bin/finalize_overdue.php`。
+
 ## 4. 錯誤碼
 
 ### 4.1 通用

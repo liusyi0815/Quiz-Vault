@@ -28,6 +28,18 @@
       "problemMatcher": []
     },
     {
+      "label": "冒煙測試（M4）",
+      "type": "shell",
+      "command": "php tests/smoke_m4.php",
+      "problemMatcher": []
+    },
+    {
+      "label": "結算逾時作答",
+      "type": "shell",
+      "command": "php bin/finalize_overdue.php",
+      "problemMatcher": []
+    },
+    {
       "label": "單元測試",
       "type": "shell",
       "command": "php tests/unit_domain.php",
