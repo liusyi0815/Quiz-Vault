@@ -4,7 +4,7 @@
 
 **技術**：PHP 8.2 + MySQL 8.0 + HTML / CSS / JavaScript（REST API，前後端分離）
 
-> 目前階段：**規劃書 + 資料庫 + 後端 M0～M4**。資料庫（`database/`）、後端骨架、帳號（F-01、F-02、F-22）、課程／修課／章節／題庫（F-03～F-06）、考卷與組卷與發佈（F-08～F-10）已完成並實測；作答與自動批改與成績與逾時處理（F-11、F-12、F-14、F-18）也已完成；簡答題評分、統計、錯題本（M5）與前端頁面尚未開始。規劃文件放在 [`docs/`](docs/)。
+> 目前階段：**規劃書 + 資料庫 + 後端 M0～M5**。資料庫（`database/`）、後端骨架、帳號（F-01、F-02、F-22）、課程／修課／章節／題庫（F-03～F-06）、考卷與組卷與發佈（F-08～F-10）已完成並實測；作答與自動批改與成績與逾時處理（F-11、F-12、F-14、F-18）也已完成；簡答題評分、標籤、統計、收藏與錯題本、使用者管理（F-07、F-13、F-15、F-16、F-17）也已完成。**後端功能已全部完成，只剩前端頁面。**規劃文件放在 [`docs/`](docs/)。
 
 ## 規劃書
 
@@ -102,6 +102,12 @@ quiz-system/
    C:\xampp\php\php.exe bin\finalize_overdue.php
    ```
 
+   M5（標籤、簡答題評分、統計、收藏與錯題本、使用者管理）的測試。使用者管理與刪除標籤需要管理員密碼（`ADMIN_PASSWORD`），沒有的話會自動略過那幾項：
+
+   ```bat
+   php tests\smoke_m5.php
+   ```
+
    另有**不需要伺服器與資料庫**的單元測試，驗證題型規則、開放時段（邊界到秒）、發佈檢查與日期解析：
 
    ```bat
@@ -142,6 +148,14 @@ quiz-system/
 | POST | `/attempts/{attempt_id}/submit` | 交卷並自動批改（F-12） |
 | GET | `/attempts/{attempt_id}/result` | 成績；考卷結束後才有逐題結果與解析（F-14） |
 | GET | `/me/attempts` | 我的作答紀錄 |
+| PATCH | `/attempts/{attempt_id}/answers/{question_id}/grade` | 簡答題人工評分（F-13） |
+| GET / POST / DELETE | `/tags`、`/tags/{tag_id}` | 標籤列表、新增、刪除（刪除僅管理員）（F-07） |
+| GET | `/exams/{exam_id}/stats` | 考卷統計：平均、最高、最低、及格率、分數分佈（F-15） |
+| GET | `/courses/{course_id}/stats/questions`、`/stats/chapters` | 各題答對率、班級章節弱點 |
+| GET | `/me/stats/chapters` | 個人章節弱點 |
+| GET | `/me/bookmarks`、`/me/wrong-questions` | 我的收藏、錯題本（F-16） |
+| PUT / DELETE | `/me/bookmarks/{question_id}` | 收藏（含筆記）、取消收藏 |
+| GET / POST / PATCH | `/admin/users`、`/admin/users/{user_id}` | 使用者列表、建立老師／管理員、改角色與停用（F-17） |
 
 > `public/router.php` 只供 `php -S` 開發用；Apache / XAMPP 環境走 `public/api/.htaccess`。
 

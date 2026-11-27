@@ -142,6 +142,11 @@
 - 標籤名稱唯一，比對時忽略大小寫與前後空白。
 - 刪除標籤只移除與題目的關聯（`question_tags` 連動刪除），不影響題目；僅管理員可刪。
 
+**實作備註**（M5）
+- 老師與管理員都能看與新增，只有管理員能刪。標籤是全站共用，不屬於任何課程。
+- 重複（含大小寫不同、前後空白）回 `409 TAG_EXISTS`，`details` 帶既有標籤；同時新增同一個標籤時由唯一鍵擋下，只會有一筆成功。
+- 列表附每個標籤的 `question_count`，可用 `?q=` 搜尋。
+
 **端點**：`GET /tags`、`POST /tags`、`DELETE /tags/{tag_id}`
 
 ---
@@ -211,6 +216,10 @@
 - 交卷具冪等性：重複交卷回傳同一份結果。
 - 作答期間 response **不含** `is_correct` 與解析。
 
+**實作備註**（M4）
+- 開始作答時為該考卷的每一題預先建立空白的作答明細，暫存一律是「整題取代」。
+- 截止時間 = `min(開始時間 + 限時, 考卷結束時間)`，伺服器允許 `ATTEMPT_GRACE_SECONDS`（預設 5 秒）寬限。
+
 **端點**：`POST /exams/{exam_id}/attempts`、`GET /attempts/{attempt_id}`、`PUT /attempts/{attempt_id}/answers/{question_id}`、`POST /attempts/{attempt_id}/submit`、`GET /me/attempts`
 
 ---
@@ -223,6 +232,10 @@
 - 客觀題採「全對才給分」：勾選集合必須與正確選項集合完全相同。
 - 未作答視為答錯。
 - 簡答題先不計分（`is_correct = NULL`）；若考卷含簡答題，作答停在 `submitted`，待老師評完才變 `graded`。
+
+**實作備註**（M4）
+- 簡答題沒有作答（空白）時，交卷就直接給 0 分，不需要老師評分；有作答的才會讓作答停在 `submitted`。
+- `passed`：有簡答題待評分且目前未及格時為 `null`（未定）；人工評分只會加分，所以已及格就一定是 `true`。
 
 **端點**：無獨立端點，由 `POST /attempts/{attempt_id}/submit` 觸發。
 
@@ -237,6 +250,11 @@
 - 只能對簡答題評分；對客觀題回 `NOT_GRADABLE`。
 - 已 `graded` 的作答可重新評分，總分隨之重算。
 
+**實作備註**（M5）
+- 只能對已交卷（`submitted` / `graded`）的作答評分，作答中回 `409 ATTEMPT_NOT_SUBMITTED`。分數最多兩位小數。
+- 給滿分記為 `is_correct = 1`，其餘為 `0`。回應附 `attempt_status`、`total_score`、`passed` 與 `pending_manual_grading`。
+- 空白的簡答題已自動 0 分，老師仍可替它補給分數（例如紙本補交）。
+
 **端點**：`PATCH /attempts/{attempt_id}/answers/{question_id}/grade`、`GET /exams/{exam_id}/attempts`
 
 ---
@@ -250,6 +268,8 @@
 - 逐題對錯、正確答案與解析：在考卷關閉（或超過結束時間）後才開放，避免答案在考試期間流傳。
 - 老師在任何時候都可看到完整答案。
 
+**實作備註**（M4）：`answers_revealed` 旗標明確告訴前端目前是否開放逐題結果；作答中查詢回 `409 ATTEMPT_NOT_SUBMITTED`。
+
 **端點**：`GET /attempts/{attempt_id}/result`、`GET /me/attempts`、`GET /exams/{exam_id}/attempts`
 
 ---
@@ -262,6 +282,12 @@
 - 統計只納入 `graded` 的作答；有簡答題待評分的作答不納入。
 - 各題答對率由低到高排序，方便老師找出難題或有誤的題目。
 
+**實作備註**（M5）
+- 統計只納入 `graded` 的作答；同一位學生多次作答時每一次都算。`pending_attempts` 告訴老師還有幾份在等評分。
+- 分數分佈以「占配分總和的百分比」分三段：`0-59`、`60-79`、`80-100`。
+- 學生個人章節弱點只納入「已可檢視解析」（考卷已關閉或已超過結束時間）的考卷，避免考試期間靠統計推測答案。
+- 各題答對率與章節弱點可用在老師自己的課程，別人的課程回 `404`。
+
 **端點**：`GET /exams/{exam_id}/stats`、`GET /courses/{course_id}/stats/questions`、`GET /courses/{course_id}/stats/chapters`、`GET /me/stats/chapters`
 
 ---
@@ -273,6 +299,12 @@
 **規則摘要**
 - 只有「該學生已可檢視解析」的題目才能收藏，避免以收藏功能繞過答案揭露規則。
 - 錯題本由 `attempt_answers.is_correct = 0` 計算，同一題多次答錯合併顯示次數與最近一次時間。
+
+**實作備註**（M5）
+- 收藏條件：學生作答過這一題，而且那份考卷已關閉或已超過結束時間；否則一律 `404`。
+- 重複收藏等同更新筆記（`PUT` 冪等，筆記最長 255 字）；取消一個沒收藏的題目回 `404`。
+- 收藏列表只在「仍可檢視」時才附正確答案與解析（`answers_revealed`）。
+- 錯題本：簡答題只拿部分分數也算答錯；還在等評分的簡答題不算錯。附上「最近一次答錯時我選的答案」。可用 `course_id`、`chapter_id` 篩選。
 
 **端點**：`GET /me/bookmarks`、`PUT /me/bookmarks/{question_id}`、`DELETE /me/bookmarks/{question_id}`、`GET /me/wrong-questions`
 
@@ -288,6 +320,12 @@
 - 管理員建立的新帳號預設標記「須先改密碼」，使用者首次登入必須改掉管理員設定的初始密碼。
 - 使用者忘記密碼時，由管理員重設，見 [F-22](#f-22-管理員重設密碼--p1)。
 
+**實作備註**（M5）
+- 建立帳號只能建老師或管理員（學生自行註冊）；密碼由系統產生，只在建立的那次回應出現，帳號預設須先改密碼。
+- 停用帳號會立刻讓對方已登入的連線失效。管理員不能停用或降級自己（`CANNOT_MODIFY_SELF`）。
+- 「最後一位管理員」的判斷在鎖住所有啟用中管理員之後才進行，兩位管理員同時互相停用對方時，只會有一位成功。
+- 學生與老師／管理員之間換角色，若帳號已有修課、作答、課程、題目或考卷等歷史資料，回 `409 ROLE_IN_USE`（老師與管理員之間可直接換）。
+
 **端點**：`GET /admin/users`、`POST /admin/users`、`PATCH /admin/users/{user_id}`
 
 ---
@@ -300,6 +338,8 @@
 - P0：任何讀取該作答、或老師查看考卷作答列表時，若發現逾時就即時補交卷（lazy finalize）。
 - P1：以排程 `bin/finalize_overdue.php` 每分鐘批次處理。
 - 交卷時只採計逾時前已暫存的答案。
+
+**實作備註**（M4）：結算在鎖住作答單、重新確認狀態後才進行，所以與學生交卷或另一個排程同時發生也不會重複批改。
 
 ---
 

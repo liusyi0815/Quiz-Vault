@@ -353,6 +353,12 @@ final class AttemptService
         return $count;
     }
 
+    /** 統計用：先把這份考卷已逾時的作答結算掉 */
+    public function finalizeOverdueForExam(int $examId): void
+    {
+        $this->finalizeOverdueFor(null, $examId);
+    }
+
     /** 讀取時順手結算：某位學生（可限定考卷）或某份考卷的逾時作答 */
     private function finalizeOverdueFor(?int $userId, ?int $examId): void
     {

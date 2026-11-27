@@ -652,6 +652,37 @@ body 可選，帶入最後尚未暫存的答案（逾時後送來的答案會被
 - `GET /attempts/{id}/result`：交卷後立刻有 `total_score`、`passed`；`answers_revealed` 為 `false` 時沒有逐題 `answers`，考卷關閉或超過結束時間後才為 `true`。老師與管理員隨時可看完整內容。作答中回 `409 ATTEMPT_NOT_SUBMITTED`。
 - 逾時處理：任何讀取發現已逾時就先結算；另有排程腳本 `bin/finalize_overdue.php`。
 
+### 3.21 M5 的實際行為
+
+**標籤（F-07）**：`GET /tags?q=` 回 `[{tag_id, name, question_count}]`（有分頁）。`POST /tags` 回 `201`；重複回 `409 TAG_EXISTS`。`DELETE /tags/{id}` 只有管理員，回 `204`，題目不受影響。
+
+**簡答題評分（F-13）**：`PATCH /attempts/{id}/answers/{question_id}/grade`，body `{ "score_awarded": 30 }`。
+
+```json
+{ "data": { "question_id": 104, "score_awarded": 30, "max_score": 50, "is_correct": false,
+            "attempt_status": "graded", "total_score": 70, "passed": true, "pending_manual_grading": 0 } }
+```
+
+- 作答中 `409 ATTEMPT_NOT_SUBMITTED`；客觀題 `409 NOT_GRADABLE`；超出 `0 ~ 配分` `400 SCORE_OUT_OF_RANGE`（`details` 帶 `max`）；最多兩位小數。別的老師的作答回 `404`。
+
+**統計（F-15）**
+
+- `GET /exams/{id}/stats`：除 §3.11 的欄位外，還有 `total_points`、`pass_score`、`pending_attempts`（還在等評分、未納入統計）、`in_progress_attempts`、`distribution_basis`（`percent_of_total_points`）。沒有任何已批改作答時，`avg_score`、`max_score`、`min_score`、`pass_rate` 為 `null`。
+- `GET /courses/{id}/stats/questions?exam_id=&chapter_id=`：`[{question_id, type, content, chapter, answered, correct, correct_rate}]`，由低到高，有分頁。
+- `GET /courses/{id}/stats/chapters` 與 `GET /me/stats/chapters?course_id=`：`{ course_id, chapters: [{chapter_id, name, total, correct, correct_rate}] }`，由低到高；個人版多一個 `course`，且只納入已可檢視解析的考卷。
+
+**收藏與錯題本（F-16）**
+
+- `PUT /me/bookmarks/{question_id}`，body `{ "note": "..." }`（選填、最多 255 字），回 `200 {question_id, note, created_at}`。不符資格回 `404`。`DELETE` 回 `204`，沒收藏回 `404`。
+- `GET /me/bookmarks?course_id=`：每筆含 `chapter`、`course`、`note`、`bookmarked_at`、`answers_revealed`；`options`（含 `is_correct`）與 `explanation` 只在 `answers_revealed = true` 時才有，否則為 `null`。
+- `GET /me/wrong-questions?course_id=&chapter_id=`：`[{question_id, type, content, chapter, course, wrong_times, last_wrong_at, bookmarked, options, explanation, last_answer: {attempt_id, option_ids, answer_text}}]`。
+
+**使用者管理（F-17）**
+
+- `GET /admin/users?role=&q=&is_active=`：每筆含 `is_active`、`created_at`，絕不含密碼雜湊。
+- `POST /admin/users`，body `{ "username", "email", "role": "teacher" | "admin" }` → `201`，`{ user, temp_password }`；`temp_password` 只出現這一次，帳號 `must_change_password = true`。email 重複 `409 EMAIL_TAKEN`。
+- `PATCH /admin/users/{id}`，body 至少有 `role` 或 `is_active`：對自己 `409 CANNOT_MODIFY_SELF`；最後一位管理員 `409 LAST_ADMIN`；歷史資料擋下的換角色 `409 ROLE_IN_USE`。
+
 ## 4. 錯誤碼
 
 ### 4.1 通用
@@ -679,6 +710,7 @@ body 可選，帶入最後尚未暫存的答案（逾時後送來的答案會被
 | 400 | `WRONG_PASSWORD` | 修改密碼時舊密碼不正確 |
 | 409 | `LAST_ADMIN` | 不能停用或降級最後一位管理員 |
 | 409 | `CANNOT_MODIFY_SELF` | 管理員不能停用、降級或重設自己的密碼 |
+| 409 | `ROLE_IN_USE` | 帳號已有課程、題目、考卷、修課或作答紀錄，不能在學生與老師之間換角色（`details` 帶各項數量） |
 | 403 | `PASSWORD_CHANGE_REQUIRED` | 帳號被標記須先改密碼；改完前只能使用 `GET /me`、`PUT /me/password`、`POST /auth/logout` |
 
 ### 4.3 課程與章節
@@ -698,6 +730,7 @@ body 可選，帶入最後尚未暫存的答案（逾時後送來的答案會被
 | 409 | `QUESTION_IN_USE` | 題目已被作答或已發佈考卷使用，不可改題型、題幹與選項 |
 | 409 | `QUESTION_INACTIVE` | 題目已停用，不可加入考卷 |
 | 409 | `INSUFFICIENT_QUESTIONS` | 隨機抽題的符合題數不足 |
+| 409 | `TAG_EXISTS` | 標籤已存在（忽略大小寫與前後空白），`details` 帶既有標籤 |
 
 ### 4.5 考卷
 

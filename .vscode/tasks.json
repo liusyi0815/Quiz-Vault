@@ -34,6 +34,12 @@
       "problemMatcher": []
     },
     {
+      "label": "冒煙測試（M5）",
+      "type": "shell",
+      "command": "php tests/smoke_m5.php",
+      "problemMatcher": []
+    },
+    {
       "label": "結算逾時作答",
       "type": "shell",
       "command": "php bin/finalize_overdue.php",

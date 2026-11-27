@@ -148,7 +148,7 @@ function loginAs(string $base, string $email, string $password): array
     return [$c, (string) $r[1]['data']['csrf_token'], (int) $r[1]['data']['user']['user_id']];
 }
 
-/** 註冊一位測試學生並登入，回傳 [Client, csrf_token, user_id, email] */
+/** 註冊一位測試學生並登入，回傳 [Client, csrf_token, user_id, email, password] */
 function registerStudent(string $base, string $tag): array
 {
     $c = new Client($base);
@@ -156,7 +156,7 @@ function registerStudent(string $base, string $tag): array
     $pw = 'SmokeTest#' . bin2hex(random_bytes(3));
     $c->call('POST', '/auth/register', ['username' => "冒煙學生{$tag}", 'email' => $email, 'password' => $pw]);
     $r = $c->call('POST', '/auth/login', ['email' => $email, 'password' => $pw]);
-    return [$c, (string) $r[1]['data']['csrf_token'], (int) $r[1]['data']['user']['user_id'], $email];
+    return [$c, (string) $r[1]['data']['csrf_token'], (int) $r[1]['data']['user']['user_id'], $email, $pw];
 }
 
 /** opts(['A', true], ['B', false]) → 題目選項陣列 */

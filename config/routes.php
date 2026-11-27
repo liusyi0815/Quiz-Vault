@@ -5,12 +5,16 @@ use App\Core\Router;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AttemptController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BookmarkController;
 use App\Http\Controllers\ChapterController;
 use App\Http\Controllers\CourseController;
 use App\Http\Controllers\EnrollmentController;
 use App\Http\Controllers\ExamController;
+use App\Http\Controllers\GradingController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\QuestionController;
+use App\Http\Controllers\StatsController;
+use App\Http\Controllers\TagController;
 
 /**
  * 路由表。middleware 依序執行：auth → must_change → csrf → role
@@ -36,7 +40,10 @@ return static function (Router $r): void {
     $r->add('PUT',   '/me/password', [AuthController::class, 'changePassword'], $allow);
     $r->add('PATCH', '/me',          [AuthController::class, 'updateMe'],       $user);
 
-    // ---------- 管理員（F-22）----------
+    // ---------- 使用者管理（F-17）與重設密碼（F-22）----------
+    $r->add('GET',   '/admin/users',           [AdminUserController::class, 'index'],  $admin);
+    $r->add('POST',  '/admin/users',           [AdminUserController::class, 'store'],  $admin);
+    $r->add('PATCH', '/admin/users/{user_id}', [AdminUserController::class, 'update'], $admin);
     $r->add('POST', '/admin/users/{user_id}/reset-password', [AdminUserController::class, 'resetPassword'], $admin);
 
     // ---------- 課程（F-03）----------
@@ -87,4 +94,23 @@ return static function (Router $r): void {
     $r->add('POST', '/attempts/{attempt_id}/submit',                   [AttemptController::class, 'submit'],     $student);
     $r->add('GET',  '/attempts/{attempt_id}/result',                   [AttemptController::class, 'result'],     $user);
     $r->add('GET',  '/me/attempts',                                    [AttemptController::class, 'mine'],       $student);
+    // ---------- 標籤管理（F-07）：老師、管理員可看與新增，只有管理員可刪 ----------
+    $r->add('GET',    '/tags',          [TagController::class, 'index'],   $teacher);
+    $r->add('POST',   '/tags',          [TagController::class, 'store'],   $teacher);
+    $r->add('DELETE', '/tags/{tag_id}', [TagController::class, 'destroy'], $admin);
+
+    // ---------- 簡答題人工評分（F-13）----------
+    $r->add('PATCH', '/attempts/{attempt_id}/answers/{question_id}/grade', [GradingController::class, 'grade'], $teacher);
+
+    // ---------- 統計（F-15）----------
+    $r->add('GET', '/exams/{exam_id}/stats',            [StatsController::class, 'exam'],          $teacher);
+    $r->add('GET', '/courses/{course_id}/stats/questions', [StatsController::class, 'questions'],  $teacher);
+    $r->add('GET', '/courses/{course_id}/stats/chapters',  [StatsController::class, 'courseChapters'], $teacher);
+    $r->add('GET', '/me/stats/chapters',                [StatsController::class, 'myChapters'],    $student);
+
+    // ---------- 收藏與錯題本（F-16）----------
+    $r->add('GET',    '/me/bookmarks',                [BookmarkController::class, 'index'],          $student);
+    $r->add('PUT',    '/me/bookmarks/{question_id}',  [BookmarkController::class, 'put'],            $student);
+    $r->add('DELETE', '/me/bookmarks/{question_id}',  [BookmarkController::class, 'destroy'],        $student);
+    $r->add('GET',    '/me/wrong-questions',          [BookmarkController::class, 'wrongQuestions'], $student);
 };

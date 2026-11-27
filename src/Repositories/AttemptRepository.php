@@ -242,6 +242,43 @@ final class AttemptRepository
         )->execute(['now' => $submittedAt, 'a' => $attemptId]);
     }
 
+    // ---------------------------------------------------------------- 人工評分（F-13）
+
+    /** 這次作答中的某一題：題型與這份考卷給它的配分（沒有就代表這題不屬於這次作答） */
+    public function gradingRow(int $attemptId, int $questionId): ?array
+    {
+        $stmt = Database::connection()->prepare(
+            'SELECT aa.answer_id, q.type, eq.score AS max_score
+             FROM exam_attempts ea
+             JOIN attempt_answers aa ON aa.attempt_id = ea.attempt_id AND aa.question_id = :q
+             JOIN questions q ON q.question_id = aa.question_id
+             JOIN exam_questions eq ON eq.exam_id = ea.exam_id AND eq.question_id = aa.question_id
+             WHERE ea.attempt_id = :a'
+        );
+        $stmt->execute(['a' => $attemptId, 'q' => $questionId]);
+        return $stmt->fetch() ?: null;
+    }
+
+    /** 給分（滿分記為答對，其餘記為答錯；評過就不再是 NULL） */
+    public function setManualScore(int $answerId, float $score, bool $full): void
+    {
+        Database::connection()->prepare('UPDATE attempt_answers SET score_awarded = :s, is_correct = :c WHERE answer_id = :id')
+            ->execute(['s' => $score, 'c' => $full ? 1 : 0, 'id' => $answerId]);
+    }
+
+    /** 重算總分與狀態（不動 submitted_at）：還有待評分的簡答題維持 submitted，否則 graded */
+    public function recalculate(int $attemptId): void
+    {
+        Database::connection()->prepare(
+            "UPDATE exam_attempts ea
+             SET ea.total_score = (SELECT COALESCE(SUM(score_awarded), 0) FROM attempt_answers WHERE attempt_id = ea.attempt_id),
+                 ea.status = IF(EXISTS (SELECT 1 FROM attempt_answers aa JOIN questions q ON q.question_id = aa.question_id
+                                        WHERE aa.attempt_id = ea.attempt_id AND q.type = 'short' AND aa.is_correct IS NULL),
+                                'submitted', 'graded')
+             WHERE ea.attempt_id = :a"
+        )->execute(['a' => $attemptId]);
+    }
+
     // ---------------------------------------------------------------- 逾時
 
     /** 已逾時（超過 deadline + 寬限，$cutoff = 現在 - 寬限）但還在作答中的作答單 */
