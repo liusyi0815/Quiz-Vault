@@ -1,75 +1,104 @@
 import * as THREE from "three";
+import { MainScene } from "./scenes/MainScene";
+import { TeacherScene } from "./scenes/TeacherScene";
+import { AuthTransition } from "./auth/AuthTransition";
+import { AuthModal } from "./auth/AuthModal";
 
-import { MainScene }
-from "./scenes/MainScene";
-
-const scene =
-    new THREE.Scene();
-
+const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
     60,
     window.innerWidth / window.innerHeight,
     0.1,
     1000
 );
-// 將 Y 軸拉高（例如從 5 改為 8），Z 軸拉遠（例如從 20 改為 25），俯視整個星系
 camera.position.set(0, 8, 25);
 
-const renderer =
-    new THREE.WebGLRenderer({
+const renderer = new THREE.WebGLRenderer({
+    antialias: true
+});
+renderer.setSize(window.innerWidth, window.innerHeight);
 
-        antialias: true
-
-    });
-
-renderer.setSize(
-
-    window.innerWidth,
-
-    window.innerHeight
-
-);
-
-const appContainer = document.getElementById('app');
+const appContainer = document.getElementById("app");
 appContainer.appendChild(renderer.domElement);
 
-const mainScene =
-    new MainScene(
-        scene,
-        camera
-    );
+const studentScene = new MainScene(scene, camera);
+const teacherScene = new TeacherScene(scene, camera);
 
-mainScene.init();
+// 初始僅建立燈光與 3D 星空背景
+studentScene.createLights();
+studentScene.createStars();
 
-window.addEventListener(
-    "keydown",
-    (event) => {
+let activeRole = null; // "student" | "teacher" | null
+let studentInitialized = false;
+let teacherInitialized = false;
 
-        if (event.key === "ArrowRight")
-            mainScene.nextPlanet();
+function enterUniverse(role) {
+    authModal.hide();
+    activeRole = role === "teacher" ? "teacher" : "student";
 
-        if (event.key === "ArrowLeft")
-            mainScene.previousPlanet();
+    if (activeRole === "teacher") {
+        if (!teacherInitialized) {
+            teacherScene.init();
+            teacherInitialized = true;
+        }
+    } else {
+        if (!studentInitialized) {
+            studentScene.init();
+            studentInitialized = true;
+        }
     }
-);
-
-function animate() {
-
-    requestAnimationFrame(
-        animate
-    );
-
-    mainScene.update();
-
-    renderer.render(
-        scene,
-        camera
-    );
 }
 
+const authModal = new AuthModal({
+    onSuccess: ({ role, mode, data }) => {
+        console.log(`${role} ${mode} 成功：`, data);
+        enterUniverse(role);
+    },
+    onBackToRoleSelect: () => {
+        authModal.hide();
+        authTransition.resetAndShow();
+    }
+});
+
+const authTransition = new AuthTransition({
+    skyImage: "/sky-bg.png",
+    studentUfoImage: "/ufo-student.png",
+    teacherUfoImage: "/ufo-teacher.png",
+    onComplete: (selectedRole) => {
+        authModal.mount(selectedRole);
+    }
+});
+authTransition.mount();
+
+window.addEventListener("keydown", (event) => {
+    if (activeRole === "teacher") {
+        if (event.key === "ArrowRight") teacherScene.nextPlanet();
+        if (event.key === "ArrowLeft") teacherScene.previousPlanet();
+    } else if (activeRole === "student") {
+        if (event.key === "ArrowRight") studentScene.nextPlanet();
+        if (event.key === "ArrowLeft") studentScene.previousPlanet();
+    }
+});
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    if (activeRole === "teacher") {
+        teacherScene.update();
+    } else if (activeRole === "student") {
+        studentScene.update();
+    } else {
+        // 身分選擇與登入階段：僅讓星空背景緩慢自轉
+        if (studentScene.starField) {
+            studentScene.starField.rotation.y += 0.0002;
+        }
+    }
+
+    renderer.render(scene, camera);
+}
 animate();
-// 監聽視窗大小改變，自動修正長寬比，解決星球變橢圓形的問題
-window.addEventListener('resize', () => {
+
+window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);

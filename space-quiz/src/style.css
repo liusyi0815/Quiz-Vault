@@ -672,3 +672,347 @@ canvas {
 .hover-tooltip.visible {
     opacity: 1;
 }
+
+/* 身分選擇 2D 疊加層 */
+.role-select-layer {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 400;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.sky-backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #bfe9ff;
+    background-size: cover;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    z-index: 1;
+}
+
+.role-content {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 960px;
+    padding: 24px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 48px;
+}
+
+.role-title {
+    margin: 0;
+    font-size: 42px;
+    font-weight: 700;
+    color: #1565c0;
+    letter-spacing: 4px;
+    text-shadow: 0 2px 12px rgba(255, 255, 255, 0.85);
+}
+
+.ufo-stage {
+    width: 100%;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    gap: 32px;
+}
+
+.ufo-card {
+    background: transparent;
+    border: none;
+    padding: 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+.ufo-img {
+    width: 210px;
+    max-width: 38vw;
+    height: auto;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.ufo-card[data-role="student"]:hover {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 18px rgba(0, 212, 255, 0.85));
+}
+
+.ufo-card[data-role="teacher"]:hover {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 18px rgba(255, 215, 0, 0.9));
+}
+
+.ufo-label {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1f2937;
+    background: rgba(255, 255, 255, 0.78);
+    padding: 4px 18px;
+    border-radius: 999px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* 登入 / 註冊 3D 星空疊加層 */
+.auth-layer {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 350;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    box-sizing: border-box;
+    pointer-events: auto;
+    opacity: 1;
+    transition: opacity 0.35s ease;
+}
+
+.auth-layer.hidden {
+    opacity: 0;
+    pointer-events: none;
+    display: none;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 420px;
+    max-height: 88vh;
+    background: rgba(14, 42, 71, 0.35);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 2px solid #00f6ff;
+    box-shadow: 0 0 22px rgba(0, 246, 255, 0.35);
+    border-radius: 6px;
+    padding: 24px 28px;
+    box-sizing: border-box;
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 老師身分微調邊框與光暈色系 */
+.auth-layer[data-role="teacher"] .auth-card {
+    border-color: #ffd700;
+    box-shadow: 0 0 22px rgba(255, 215, 0, 0.35);
+}
+
+.auth-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.auth-title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    color: #00f6ff;
+    letter-spacing: 2px;
+}
+
+.auth-layer[data-role="teacher"] .auth-title {
+    color: #ffd700;
+}
+
+.auth-back-role-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    color: #e5e7eb;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.auth-back-role-btn:hover {
+    border-color: #ffffff;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+}
+
+.auth-fields-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.auth-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+}
+
+.auth-field label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #00f6ff;
+}
+
+.auth-layer[data-role="teacher"] .auth-field label {
+    color: #ffe875;
+}
+
+.auth-field input {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.14);
+    border: 2px solid #00f6ff;
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 15px;
+    outline: none;
+    transition: box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.auth-layer[data-role="teacher"] .auth-field input {
+    border-color: #ffd700;
+}
+
+.auth-field input::placeholder {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 13px;
+}
+
+.auth-field input:focus {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 10px rgba(0, 246, 255, 0.45);
+}
+
+.auth-layer[data-role="teacher"] .auth-field input:focus {
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.45);
+}
+
+.auth-error-msg {
+    min-height: 18px;
+    margin: 0;
+    font-size: 13px;
+    color: #ff6b81;
+    text-align: left;
+}
+
+.auth-submit-btn {
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    background: #00f6ff;
+    color: #071926;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s ease, filter 0.2s ease;
+}
+
+.auth-layer[data-role="teacher"] .auth-submit-btn {
+    background: #ffd700;
+    color: #1f1800;
+}
+
+.auth-submit-btn:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
+.auth-footer {
+    margin-top: 14px;
+    font-size: 14px;
+    color: #e5e7eb;
+    text-align: center;
+}
+
+.auth-link-btn {
+    background: none;
+    border: none;
+    padding: 0 2px;
+    color: #00f6ff;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.auth-layer[data-role="teacher"] .auth-link-btn {
+    color: #ffd700;
+}
+
+/* 教師申請送出審核提示 Modal */
+.auth-pending-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(6px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.auth-pending-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.auth-pending-box {
+    width: 90%;
+    max-width: 380px;
+    background: rgba(16, 32, 54, 0.92);
+    border: 2px solid #ffd700;
+    box-shadow: 0 0 24px rgba(255, 215, 0, 0.35);
+    border-radius: 10px;
+    padding: 24px;
+    box-sizing: border-box;
+    color: #ffffff;
+    text-align: center;
+}
+
+.auth-pending-box h3 {
+    margin: 0 0 12px;
+    font-size: 22px;
+    color: #ffd700;
+}
+
+.auth-pending-box p {
+    margin: 0 0 20px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #e5e7eb;
+}
